@@ -1,0 +1,33 @@
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[project]
+name = "nsdn"
+version = "0.1.0"
+description = "No Social Detox News - AI-curated static digest system"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = []
+license = {text = "MIT"}
+dependencies = [
+    "feedparser>=6.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "mistune>=3.0",
+    "click>=8.1",
+    "pydantic>=2.0",
+    "weaviate-client>=4.0",
+    "requests>=2.31",
+    "openai>=1.0",
+    "ollama>=0.0",
+    "llama-cpp-python>=0.1",
+]
+
+[project.scripts]
+nsdn = "nsdn.cli:cli"
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=7.0"
+pytest-cov = ">=4.0"
+ruff = ">=0.1"
