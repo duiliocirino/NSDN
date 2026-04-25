@@ -1,0 +1,120 @@
+# NSDN Configuration
+
+interests:
+  - "AI/ML research, discussion and tools"
+  - "Finance and economics"
+  - "Relationships and social dynamics"
+  - "Philosophy and psychology"
+  - "Health and fitness"
+  - "Casual content"
+  - "Board games and hobbies"
+  - "Yu-Gi-Oh!"
+  - "Memes and internet culture"
+
+sources:
+  - type: reddit
+    name: "r/ItaliaPersonalFinance"
+    config:
+      subreddit: "ItaliaPersonalFinance"
+      sort: "hot"
+      limit: 15
+      time_filter: "day"
+  - type: reddit
+    name: "r/scimmieinborsa"
+    config:
+      subreddit: "scimmieinborsa"
+      sort: "hot"
+      limit: 15
+      time_filter: "day"
+  - type: reddit
+    name: "r/Italy"
+    config:
+      subreddit: "Italy"
+      sort: "hot"
+      limit: 10
+      time_filter: "day"
+  - type: reddit
+    name: "r/LocalLLaMA"
+    config:
+      subreddit: "LocalLLaMA"
+      sort: "hot"
+      limit: 25
+      time_filter: "day"
+  - type: reddit
+    name: "r/MistralAI"
+    config:
+      subreddit: "MistralAI"
+      sort: "hot"
+      limit: 10
+      time_filter: "day"
+  - type: reddit
+    name: "r/deepseek"
+    config:
+      subreddit: "deepseek"
+      sort: "hot"
+      limit: 10
+      time_filter: "day"
+  - type: reddit
+    name: "r/relationshipadvice"
+    config:
+      subreddit: "relationshipadvice"
+      sort: "hot"
+      limit: 10
+      time_filter: "day"
+  - type: reddit
+    name: "r/CasualIT"
+    config:
+      subreddit: "CasualIT"
+      sort: "hot"
+      limit: 10
+      time_filter: "day"
+  - type: reddit
+    name: "r/masterduel"
+    config:
+      subreddit: "masterduel"
+      sort: "hot"
+      limit: 10
+      time_filter: "day"
+
+filter:
+  mode: "batch"
+  batch_size: 30
+  score_threshold: 8
+  max_items_per_feed: 25
+
+synthesize:
+  mode: "llm"
+  raw_content: "summary"
+  raw_max_chars: 2000
+  max_sections: 5
+  style: "technical_minimal"
+
+output:
+  directory: "./output/journal"
+  designer: "pico"
+  inline_css: true
+  cache_images: false
+
+retention:
+  keep_days: 30
+  action: "archive"
+
+llm:
+  provider: "llama_server"
+  model: "gemma4-e4b"
+  base_url: "http://localhost:8181"
+  temperature: 0.0
+  max_tokens: 32768
+
+weaviate:
+  enabled: true
+  url: "http://localhost:8080"
+  embedding_model: "qwen3-embedding:8b"
+  embedding_endpoint: "http://localhost:11434"
+  dedup_threshold: 0.95
+  collection_name: "NSDNEntries"
+
+schedule:
+  - "08:00"
+  - "13:00"
+  - "19:00"
