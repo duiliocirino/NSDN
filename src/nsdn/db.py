@@ -32,7 +32,9 @@ CREATE TABLE IF NOT EXISTS entries (
     images TEXT,
     score REAL,
     kept BOOLEAN DEFAULT 0,
+    summarized BOOLEAN DEFAULT 0,
     processed_in_edition TEXT,
+    designed_in_edition TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (source_id) REFERENCES sources(id)
 );
@@ -65,7 +67,16 @@ class Database:
 
     def _init_schema(self) -> None:
         self.conn.executescript(SCHEMA_SQL)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """Apply incremental migrations."""
+        cols = [desc[1] for desc in self.conn.execute("PRAGMA table_info(entries)").fetchall()]
+        if "summarized" not in cols:
+            self.conn.execute("ALTER TABLE entries ADD COLUMN summarized BOOLEAN DEFAULT 0")
+        if "designed_in_edition" not in cols:
+            self.conn.execute("ALTER TABLE entries ADD COLUMN designed_in_edition TEXT")
 
     def upsert_source(self, source_type: str, name: str, source_config: dict | None = None) -> int:
         cur = self.conn.execute(
@@ -134,9 +145,9 @@ class Database:
 
     def mark_processed(self, entry_guids: list[str], edition_date: str, edition_slot: str) -> None:
         placeholders = ",".join("?" for _ in entry_guids)
-        self.conn.executemany(
+        self.conn.execute(
             f"UPDATE entries SET processed_in_edition = ? WHERE guid IN ({placeholders})",
-            [edition_date] + entry_guids,
+            (edition_date,) + tuple(entry_guids),
         )
         self.conn.commit()
 
