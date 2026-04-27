@@ -51,9 +51,10 @@ def _filter_sequential(
     threshold = config.filter_.score_threshold
 
     for entry in entries:
-        prompt = f"Title: {entry.title}\nSummary: {entry.summary or '(none)'}\nSource: {entry.source_name}"
+        tags = ", ".join(entry.tags) if entry.tags else "(none)"
+        prompt = f"Title: {entry.title}\nSummary: {entry.summary or '(none)'}\nSource: {entry.source_name}\nTags: {tags}"
         try:
-            resp = llm.invoke(prompt, system_message=system, temperature=config.llm.temperature)
+            resp = llm.invoke(prompt, system_message=system, temperature=config.llm.get("filter").temperature)
             # Extract integer from response
             score = _parse_score(resp)
         except Exception as exc:
@@ -86,12 +87,13 @@ def _filter_batch(
                 "title": e.title,
                 "summary": e.summary,
                 "source": e.source_name,
+                "tags": e.tags,
             }
             for e in batch
         ]
         prompt = build_filter_prompt(batch_dicts)
         try:
-            result = llm.invoke_structured(prompt, ScoreResult, system_message=system, temperature=config.llm.temperature)
+            result = llm.invoke_structured(prompt, ScoreResult, system_message=system, temperature=config.llm.get("filter").temperature)
             all_scores.update(result.scores)
         except Exception as exc:
             logger.warning("Batch score failed at offset %d: %s", i, exc)
