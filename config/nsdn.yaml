@@ -9,7 +9,17 @@ interests:
   - "Casual content"
   - "Board games and hobbies"
   - "Yu-Gi-Oh!"
-  - "Memes and internet culture"
+  - "Memes and fun content"
+  - "Politics"
+  - "Relevant news and current events"
+
+summarize:
+  enabled: true
+  strategy: "llm"
+  batch_size: 10
+  max_content_chars: 8000
+  max_summary_chars: 8000
+  min_length: 1000
 
 sources:
   - type: reddit
@@ -24,7 +34,7 @@ sources:
     config:
       subreddit: "scimmieinborsa"
       sort: "hot"
-      limit: 15
+      limit: 5
       time_filter: "day"
   - type: reddit
     name: "r/Italy"
@@ -78,7 +88,7 @@ sources:
 
 filter:
   mode: "batch"
-  batch_size: 30
+  batch_size: 10
   score_threshold: 8
   max_items_per_feed: 25
 
@@ -86,7 +96,7 @@ synthesize:
   mode: "llm"
   raw_content: "summary"
   raw_max_chars: 2000
-  max_sections: 5
+  max_sections: 10
   style: "technical_minimal"
 
 output:
@@ -100,11 +110,24 @@ retention:
   action: "archive"
 
 llm:
-  provider: "llama_server"
-  model: "gemma4-e4b"
-  base_url: "http://localhost:8181"
-  temperature: 0.0
-  max_tokens: 32768
+  default:
+    provider: "llama_server"
+    model: "gemma4-e4b"
+    base_url: "http://localhost:8181"
+    temperature: 0.7
+    max_tokens: 131072
+
+  # Per-stage overrides (optional — uncomment to use different models)
+  # models:
+  #   filter:
+  #     provider: "ollama"
+  #     model: "phi4"
+  #   summarize:
+  #     provider: "llama_server"
+  #     model: "qwen2.5-7b"
+  #   evaluate:
+  #     provider: "llama_server"
+  #     model: "qwen2.5-vl-7b"
 
 weaviate:
   enabled: true
