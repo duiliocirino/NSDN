@@ -195,14 +195,28 @@ class LlamaServerProvider(LLMProvider):
         return resp.choices[0].message.parsed  # type: ignore[union-attr]
 
 
-def create_provider(config) -> LLMProvider:
-    """Factory: create an LLMProvider from config."""
-    provider_type = config.provider
+def create_provider(config, model_name: str | None = None) -> LLMProvider:
+    """Factory: create an LLMProvider from config.
+
+    Args:
+        config: Either a ProviderConfig (direct) or LLMConfig (with model lookup).
+        model_name: If config is LLMConfig, look up model by name from models dict.
+    """
+    from nsdn.config import LLMConfig, ProviderConfig
+
+    if isinstance(config, LLMConfig) and model_name:
+        cfg = config.get(model_name)
+    elif isinstance(config, ProviderConfig):
+        cfg = config
+    else:
+        raise ValueError("Invalid config type for LLM provider")
+
+    provider_type = cfg.provider
     if provider_type == "ollama":
-        return OllamaProvider(model=config.model, host=config.base_url)
+        return OllamaProvider(model=cfg.model, host=cfg.base_url)
     elif provider_type == "llama_cpp":
-        return LlamaCppProvider(model_path=config.model)
+        return LlamaCppProvider(model_path=cfg.model)
     elif provider_type == "llama_server":
-        return LlamaServerProvider(model=config.model or None, base_url=config.base_url)
+        return LlamaServerProvider(model=cfg.model or None, base_url=cfg.base_url)
     else:
         raise ValueError(f"Unknown LLM provider: {provider_type}")
