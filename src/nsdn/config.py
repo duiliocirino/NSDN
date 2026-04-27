@@ -13,6 +13,15 @@ class SourceConfig(BaseModel):
     config: dict[str, Any] = Field(default_factory=dict)
 
 
+class SummarizeConfig(BaseModel):
+    enabled: bool = True
+    strategy: str = "llm"
+    batch_size: int = 10
+    max_content_chars: int = 8000
+    max_summary_chars: int = 500
+    min_length: int = 500  # only summarize content longer than this
+
+
 class FilterConfig(BaseModel):
     mode: str = "sequential"  # "sequential" | "batch"
     batch_size: int = 15
@@ -22,6 +31,7 @@ class FilterConfig(BaseModel):
 
 class SynthesizeConfig(BaseModel):
     mode: str = "llm"  # "llm" | "raw"
+    cluster_strategy: str = "llm"
     raw_content: str = "summary"  # "summary" | "truncated" | "full"
     raw_max_chars: int = 2000
     max_sections: int = 5
@@ -40,12 +50,37 @@ class RetentionConfig(BaseModel):
     action: str = "archive"  # "archive" | "delete"
 
 
-class LLMConfig(BaseModel):
+class ProviderConfig(BaseModel):
+    """Configuration for a single LLM provider."""
     provider: str = "llama_server"
     model: str = ""
     base_url: str = "http://localhost:8181"
     temperature: float = 0.0
     max_tokens: int = 4096
+
+
+class LLMConfig(BaseModel):
+    """LLM configuration with per-stage model selection.
+
+    Each pipeline stage references a model by name via `models` dict.
+    Falls back to `default` if the stage is not specified.
+    """
+    default: ProviderConfig = Field(default_factory=ProviderConfig)
+    models: dict[str, ProviderConfig] = Field(default_factory=dict)
+
+    def get(self, stage: str = "") -> ProviderConfig:
+        """Get provider config for a stage, falling back to default."""
+        if stage and stage in self.models:
+            stage_cfg = self.models[stage]
+            defaults = self.default.model_dump()
+            merged = {**defaults, **stage_cfg.model_dump(exclude_unset=True)}
+            return ProviderConfig(**merged)
+        return self.default
+
+    @property
+    def temperature(self) -> float:
+        """Backward compat — returns default temperature."""
+        return self.default.temperature
 
 
 class WeaviateConfig(BaseModel):
@@ -60,6 +95,7 @@ class WeaviateConfig(BaseModel):
 class AppConfig(BaseModel):
     interests: list[str] = Field(default_factory=list)
     sources: list[SourceConfig] = Field(default_factory=list)
+    summarize: SummarizeConfig = Field(default_factory=SummarizeConfig)
     filter_: FilterConfig = Field(default_factory=FilterConfig, alias="filter")
     synthesize: SynthesizeConfig = Field(default_factory=SynthesizeConfig)
     output: OutputConfig = Field(default_factory=OutputConfig)
