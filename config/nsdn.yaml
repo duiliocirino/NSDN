@@ -1,5 +1,7 @@
 # NSDN Configuration
 
+debug: true
+
 interests:
   - "AI/ML research, discussion and tools"
   - "Finance and economics"
@@ -93,7 +95,7 @@ filter:
   max_items_per_feed: 25
 
 synthesize:
-  mode: "llm"
+  mode: "design"
   raw_content: "summary"
   raw_max_chars: 2000
   max_sections: 10
@@ -104,6 +106,9 @@ output:
   designer: "pico"
   inline_css: true
   cache_images: false
+
+newspaper:
+  font_preset: "editorial"  # classic | editorial | modern | newspaper
 
 retention:
   keep_days: 30

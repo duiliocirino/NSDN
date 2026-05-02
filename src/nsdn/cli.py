@@ -94,12 +94,16 @@ def synthesize(ctx):
 
     try:
         result = run_synthesize(config, db, llm)
-        if result["md_file"]:
+        if result.get("entries", 0) == 0:
+            click.echo("No entries to synthesize")
+        elif result.get("md_file"):
             click.echo(f"Markdown: {result['md_file']}")
             click.echo(f"HTML:     {result['html_file']}")
             click.echo(f"Entries:  {result['entries']}, Sections: {result['sections']}")
-        else:
-            click.echo("No entries to synthesize")
+        elif result.get("files"):
+            click.echo(f"Entries:  {result['entries']}, Topics: {result.get('topics', 0)}, Files: {len(result['files'])}")
+            for f in result["files"]:
+                click.echo(f"  {f}")
     finally:
         db.close()
 
@@ -137,9 +141,7 @@ def serve(ctx, port, directory):
 
 @cli.command()
 @click.pass_context
-@click.option("--design", is_flag=True, help="Run design agent instead of synthesize.")
-@click.option("--synthesize", "do_synthesize", is_flag=True, help="Run synthesize (default).")
-def run(ctx, design, do_synthesize):
+def run(ctx):
     """Run the full pipeline: extract → summarize → filter → synthesize."""
     config = ctx.obj["config"]
     db = Database()
@@ -161,26 +163,20 @@ def run(ctx, design, do_synthesize):
         filter_result = run_filter(config, db, filter_llm)
         click.echo(f"  Scored: {filter_result['scored']}, Kept: {filter_result['kept']}")
 
-        # Default to synthesize if neither flag set
-        if not design and not do_synthesize:
-            do_synthesize = True
-
-        if do_synthesize:
-            click.echo("\n=== Synthesize ===")
-            synth_llm = create_provider(config.llm, model_name="synthesize")
-            synth_result = run_synthesize(config, db, synth_llm)
-            if synth_result["md_file"]:
-                click.echo(f"  Markdown: {synth_result['md_file']}")
-                click.echo(f"  HTML:     {synth_result['html_file']}")
+        click.echo(f"\n=== Synthesize (mode={config.synthesize.mode}) ===")
+        synth_llm = create_provider(config.llm, model_name="synthesize")
+        synth_result = run_synthesize(config, db, synth_llm)
+        if config.synthesize.mode == "design":
+            if synth_result.get("files"):
+                for f in synth_result["files"]:
+                    click.echo(f"  Output: {f}")
             else:
-                click.echo("  No entries to synthesize")
-
-        if design:
-            click.echo("\n=== Design ===")
-            from nsdn.newspaper import run_newspaper
-            design_llm = create_provider(config.llm, model_name="design")
-            design_result = run_newspaper(config, db, design_llm)
-            click.echo(f"  Designed: {design_result}")
+                click.echo("  No entries to design")
+        elif synth_result.get("md_file"):
+            click.echo(f"  Markdown: {synth_result['md_file']}")
+            click.echo(f"  HTML:     {synth_result['html_file']}")
+        else:
+            click.echo("  No entries to synthesize")
     finally:
         db.close()
         if vector:

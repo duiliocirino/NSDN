@@ -30,7 +30,7 @@ class FilterConfig(BaseModel):
 
 
 class SynthesizeConfig(BaseModel):
-    mode: str = "llm"  # "llm" | "raw"
+    mode: str = "llm"  # "llm" | "raw" | "design"
     cluster_strategy: str = "llm"
     raw_content: str = "summary"  # "summary" | "truncated" | "full"
     raw_max_chars: int = 2000
@@ -92,7 +92,30 @@ class WeaviateConfig(BaseModel):
     collection_name: str = "NSDNEntries"
 
 
+class NewspaperConfig(BaseModel):
+    """Newspaper agent configuration (used when synthesize.mode = 'design')."""
+    enabled: bool = True
+    strategy: str = "component"  # "component" | "template" | "scratch"
+    max_iterations: int = 4
+    quality_threshold: int = 7
+    viewport: dict[str, int] = Field(default_factory=lambda: {"width": 794, "height": 1123})  # A4 at 96dpi
+    screenshot: dict[str, int] = Field(default_factory=lambda: {"dpi": 300})
+    pdf: dict[str, str] = Field(default_factory=lambda: {"format": "A4", "margin": "20mm"})
+    evaluation: dict[str, float] = Field(default_factory=lambda: {"text_weight": 0.3, "vlm_weight": 0.7})
+    cover: dict[str, str] = Field(default_factory=lambda: {"style": "minimal"})
+    layouts: list[str] = Field(default_factory=lambda: ["hero", "grid", "sidebar"])
+    font_preset: str = "classic"  # classic, editorial, modern, newspaper
+    fonts: dict[str, str] = Field(
+        default_factory=lambda: {
+            "serif": "Georgia, 'Times New Roman', serif",
+            "sans": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+            "google_fonts": "",  # @import URL for Google Fonts (optional)
+        }
+    )
+
+
 class AppConfig(BaseModel):
+    debug: bool = False
     interests: list[str] = Field(default_factory=list)
     sources: list[SourceConfig] = Field(default_factory=list)
     summarize: SummarizeConfig = Field(default_factory=SummarizeConfig)
@@ -102,6 +125,7 @@ class AppConfig(BaseModel):
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     weaviate: WeaviateConfig = Field(default_factory=WeaviateConfig)
+    newspaper: NewspaperConfig = Field(default_factory=NewspaperConfig)
     schedule: list[str] = Field(default_factory=lambda: ["08:00", "13:00", "19:00"])
 
     model_config = {"populate_by_name": True}

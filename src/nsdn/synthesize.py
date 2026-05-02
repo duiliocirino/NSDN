@@ -27,6 +27,10 @@ def run_synthesize(config: AppConfig, db: Database, llm: LLMProvider) -> dict[st
 
     logger.info("Synthesizing %d kept entries (mode=%s)", len(entries), config.synthesize.mode)
 
+    # Dispatch by mode
+    if config.synthesize.mode == "design":
+        return _run_design(config, db, llm, entries)
+
     # Step 1: Cluster
     entries_by_topic = _cluster(config, llm, entries)
     if not entries_by_topic:
@@ -40,6 +44,23 @@ def run_synthesize(config: AppConfig, db: Database, llm: LLMProvider) -> dict[st
         return _write_llm(config, db, llm, entries, entries_by_topic)
     else:
         return _write_raw(config, db, entries, entries_by_topic)
+
+
+def _run_design(config: AppConfig, db: Database, llm: LLMProvider, entries: list[FeedEntry]) -> dict[str, Any]:
+    """Run design mode — newspaper agent."""
+    from nsdn.newspaper import run_newspaper
+
+    # Create evaluate LLM (may be same as design LLM)
+    evaluate_llm = None
+    try:
+        from nsdn.llm import create_provider
+        evaluate_llm = create_provider(config.llm, model_name="evaluate")
+    except Exception:
+        logger.info("No separate evaluate model — using design model for evaluation")
+        evaluate_llm = llm
+
+    result = run_newspaper(config, db, llm, evaluate_llm)
+    return result
 
 
 def _cluster(config: AppConfig, llm: LLMProvider, entries: list[FeedEntry]) -> dict[str, list[FeedEntry]]:
