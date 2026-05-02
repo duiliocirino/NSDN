@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS entries (
     kept BOOLEAN DEFAULT 0,
     summarized BOOLEAN DEFAULT 0,
     processed_in_edition TEXT,
-    designed_in_edition TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (source_id) REFERENCES sources(id)
 );
@@ -75,8 +74,12 @@ class Database:
         cols = [desc[1] for desc in self.conn.execute("PRAGMA table_info(entries)").fetchall()]
         if "summarized" not in cols:
             self.conn.execute("ALTER TABLE entries ADD COLUMN summarized BOOLEAN DEFAULT 0")
-        if "designed_in_edition" not in cols:
-            self.conn.execute("ALTER TABLE entries ADD COLUMN designed_in_edition TEXT")
+        if "designed_in_edition" in cols:
+            # Remove — design is now a synthesize mode, not a separate output mode
+            try:
+                self.conn.execute("ALTER TABLE entries DROP COLUMN designed_in_edition")
+            except sqlite3.OperationalError:
+                pass  # Older SQLite doesn't support DROP COLUMN
 
     def upsert_source(self, source_type: str, name: str, source_config: dict | None = None) -> int:
         cur = self.conn.execute(
@@ -181,6 +184,7 @@ class Database:
                 published_at = datetime.fromisoformat(d["published_at"])
             except (ValueError, TypeError):
                 pass
+        score = d.get("score")
         return FeedEntry(
             source_type="",  # Not stored in entries table; resolve from source_id if needed
             source_name="",  # Not stored in entries table
@@ -193,6 +197,7 @@ class Database:
             author=d.get("author"),
             tags=json.loads(d["tags"]) if d.get("tags") else [],
             images=json.loads(d["images"]) if d.get("images") else [],
+            score=float(score) if score is not None else 0.0,
         )
 
     def _get_columns(self) -> list[str]:

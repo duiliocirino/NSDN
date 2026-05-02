@@ -21,6 +21,7 @@ class FeedEntry(BaseModel):
     author: str | None = None
     tags: list[str] = []
     images: list[str] = []
+    score: float = 0.0  # Filter score (set by LLM filter)
 
 
 class EntrySource(ABC):
