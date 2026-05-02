@@ -27,16 +27,18 @@ Sources (EntrySource)  ──►  SQLite (State Mgr)  ──►  Weaviate (Seman
                                     ▼
                               LLM Filter (score 0-10)
                                     │
-                    ┌───────────────┴───────────────┐
-                    ▼                               ▼
-             Synthesize (md+html)            Design (html+pdf)
-                    │                               │
-                    ▼                               ▼
-             {mode}-{date}-{slot}.md       cover.html + edition.pdf
-             {mode}-{date}-{slot}.html      topic pages (iterative)
-```
+                                    ▼
+                              Synthesize (config.synthesize.mode):
+                                - "llm"    → journal .md + .html
+                                - "raw"    → raw .md + .html
+                                - "design" → topic pages + cover + edition (html+pdf)
 
-**Pipeline stages:** Extract → Summarize → Filter → Synthesize (or Design)
+**Pipeline stages:** Extract → Summarize → Filter → Synthesize
+
+Synthesize has three output modes:
+- `"llm"` — LLM-written journal in Markdown + HTML
+- `"raw"` — passthrough via designer, no LLM write step
+- `"design"` — newspaper-style pages with iterative VLM feedback (see `docs/design/newspaper_agent.md`)
 
 **Pluggable abstractions (registry pattern):**
 - `EntrySource` — new data sources without touching pipeline code
@@ -86,13 +88,32 @@ nsdn/
 │   │   ├── __init__.py        # SUMMARIZER_REGISTRY + register/get/run
 │   │   ├── base.py            # SummarizerStrategy ABC
 │   │   └── llm_summarizer.py  # LLM-based summarization
+│   ├── newspaper/             # Newspaper agent (design mode)
+│   │   ├── __init__.py        # REGISTRY + register_newspaper()
+│   │   ├── component.py       # ComponentStrategy (iterative VLM feedback)
+│   │   ├── generator.py       # LayoutGenerator + font presets
+│   │   ├── renderer.py        # Renderer (Playwright + WeasyPrint)
+│   │   ├── evaluator.py       # Evaluator (VLM + text self-review)
+│   │   ├── cover.py           # CoverDesigner
+│   │   ├── prompts.py         # Design + evaluation prompts
+│   │   ├── debug.py           # DebugEmitter (structured trace + artifacts)
+│   │   └── layouts/           # Layout components
+│   │       ├── hero.py        # Hero article (with image)
+│   │       ├── grid.py        # Grid (with thumbnails)
+│   │       └── sidebar.py     # Sidebar (text-only)
 │   └── assets/                # Bundled static assets (future)
 │       └── __init__.py
 ├── templates/
 │   ├── pico.html              # Pico designer template
 │   └── water.html             # Water designer template
-├── output/journal/            # Generated editions (date-stamped)
-│   └── assets/                # Cached images (when cache_images=true)
+├── output/journal/            # Generated editions
+│   ├── assets/                # Cached images (when cache_images=true)
+│   └── {date}-{slot}/         # Edition directory (design mode)
+│       ├── cover.html
+│       ├── edition.pdf        # Combined multi-page PDF
+│       └── topics/            # Per-topic pages
+│           ├── {topic}.html
+│           └── {topic}.pdf
 ├── data/
 │   └── feeds.db               # SQLite database
 ├── pyproject.toml
@@ -219,6 +240,8 @@ class WaterDesigner(PageDesigner):
 Single YAML file (`config/nsdn.yaml`):
 
 ```yaml
+debug: false        # Enable structured debug trace + artifact storage
+
 interests:
   - "AI/ML research and tools"
   - "Finance and economics"
@@ -248,7 +271,7 @@ filter:
   max_items_per_feed: 20
 
 synthesize:
-  mode: "llm"              # "llm" | "raw"
+  mode: "llm"              # "llm" | "raw" | "design"
   cluster_strategy: "llm"
   raw_content: "summary"   # "summary" | "truncated" | "full"
   raw_max_chars: 2000
@@ -281,12 +304,34 @@ llm:
     summarize:
       provider: "llama_server"
       model: "qwen2.5-7b"
-    design:
+    design:          # Layout generation + text self-review
       provider: "llama_server"
       model: "gemma4-e4b"
-    evaluate:
+    evaluate:        # VLM screenshot evaluation
       provider: "llama_server"
       model: "qwen2.5-vl-7b"
+
+# Newspaper agent config (when synthesize.mode = "design")
+newspaper:
+  strategy: "component"
+  max_iterations: 4
+  quality_threshold: 7
+  viewport:
+    width: 794          # A4 at 96dpi
+    height: 1123
+  screenshot:
+    dpi: 300
+  pdf:
+    format: "A4"
+    margin: "20mm"
+  font_preset: "editorial"  # classic | editorial | modern | newspaper
+  fonts:                      # Override individual font values
+    serif: "Georgia, 'Times New Roman', serif"
+    sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    google_fonts: ""          # Optional: Google Fonts @import URL
+  evaluation:
+    text_weight: 0.3
+    vlm_weight: 0.7
 
 weaviate:
   enabled: true
@@ -365,7 +410,6 @@ CREATE TABLE entries (
     kept BOOLEAN DEFAULT 0,
     summarized BOOLEAN DEFAULT 0,
     processed_in_edition TEXT,
-    designed_in_edition TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (source_id) REFERENCES sources(id)
 );
@@ -473,10 +517,30 @@ Respond ONLY with valid JSON:
 
 ### 8.5 Synthesize (`nsdn synthesize`)
 
-Two-step: **Cluster → Write**.
+Three-step: **Cluster → Write → (optional) Design**.
 
 **Mode `llm`:** For each topic, LLM generates prose. Output: `{mode}-{date}-{slot}.md` + `.html`.
 **Mode `raw`:** Passthrough via designer, no LLM write step.
+**Mode `design`:** Newspaper agent — iterative VLM feedback per topic, cover page, edition assembly. Output: `output/journal/{date}-{slot}/` directory.
+
+**Design mode output structure:**
+```
+output/journal/{date}-{slot}/
+├── cover.html
+├── edition.pdf           # Combined multi-page PDF
+└── topics/
+    ├── {topic}.html
+    └── {topic}.pdf
+```
+
+**Design mode features:**
+- Automatic image rendering (first image from `FeedEntry.images` in hero/grid)
+- Font presets (classic, editorial, modern, newspaper) with Google Fonts support
+- A4-matched screenshot viewport (794×1123px) for consistent evaluation
+- Combined PDF merges per-topic CSS (not just cover CSS)
+- Debug emitter (`debug: true`) for structured trace + artifact storage
+
+See `docs/design/newspaper_agent.md` for full design agent specification.
 
 **Filenames:** `{mode}-{date}-{slot}.{ext}` (e.g., `llm-2025-01-15-morning.md`).
 
@@ -500,20 +564,11 @@ Lightweight HTTP server serving the output directory.
 ### 8.8 Full Run (`nsdn run`)
 
 ```
-nsdn run                          → extract → summarize → filter → synthesize  (default)
-nsdn run --design                 → extract → summarize → filter → design
-nsdn run --synthesize             → extract → summarize → filter → synthesize  (explicit)
-nsdn run --design --synthesize    → both output modes (independent)
+nsdn run          → extract → summarize → filter → synthesize (mode from config)
+nsdn synthesize   → standalone synthesize (mode from config)
 ```
 
-**Output modes are independent** — separate entry tracking:
-
-| Mode | Query | Side Effect |
-|---|---|---|
-| synthesize | `kept=1 AND processed_in_edition IS NULL` | sets `processed_in_edition` |
-| design | `kept=1 AND designed_in_edition IS NULL` | sets `designed_in_edition` |
-
-Both modes run their own clustering (topics may differ).
+The synthesize mode is configured in `config.synthesize.mode`. Switch between `"llm"`, `"raw"`, and `"design"` by editing the config or passing `--mode` (future CLI flag).
 
 ### 8.9 CLI Commands
 
@@ -526,7 +581,7 @@ Both modes run their own clustering (topics may differ).
 | `nsdn render -f FILE` | Render a single markdown file to HTML |
 | `nsdn render-all` | Render all unrendered markdown files |
 | `nsdn serve` | Serve output directory as static site |
-| `nsdn run [--design] [--synthesize]` | Full pipeline |
+| `nsdn run` | Full pipeline (mode from config) |
 | `nsdn validate` | Validate all configured sources |
 
 ## 9. LLM Integration
@@ -646,7 +701,7 @@ Planned: `nsdn run --dry-run` — preview without marking entries processed.
 | Sources (Reddit) | ✅ Implemented |
 | Designers (Pico, Water) | ✅ Implemented |
 | Weaviate semantic dedup | ✅ Implemented |
-| Newspaper agent (design) | 📋 Design doc, not implemented |
+| Newspaper agent (design as synthesize mode) | ✅ Implemented |
 | RSS/Atom source | ❌ Planned |
 | HackerNews source | ❌ Planned |
 | Dry-run mode | ❌ Planned |
