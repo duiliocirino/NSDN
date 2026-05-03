@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any
 
 from nsdn.llm import LLMProvider
@@ -12,6 +13,33 @@ from nsdn.newspaper.layouts import hero, grid, sidebar
 from nsdn.sources.base import FeedEntry
 
 logger = logging.getLogger(__name__)
+
+
+def _strip_image_urls(text: str) -> str:
+    """Remove image URLs that may have leaked into summary text."""
+    # Remove lines that are just image URLs (redd.it, i.redd.it, etc.)
+    lines = text.split("\n")
+    clean = [l for l in lines if not re.search(r'https?://\S*\.(png|jpg|jpeg|webp)', l.strip())]
+    return " ".join(l.strip() for l in clean if l.strip())
+
+def resolve_image_url(url: str) -> str | None:
+    """Resolve image URL to highest available resolution.
+
+    Only Reddit-hosted images are used. All other domains are rejected
+    to avoid ghost images (broken links showing only alt text in a border).
+
+    preview.redd.it / external-preview.redd.it -> i.redd.it (full-res).
+    """
+    if not url:
+        return None
+    base = url.split("?")[0].replace("&amp;", "&")
+    if "i.redd.it/" in base:
+        return base
+    if "preview.redd.it/" in base or "external-preview.redd.it/" in base:
+        base = base.replace("https://preview.redd.it/", "https://i.redd.it/")
+        base = base.replace("https://external-preview.redd.it/", "https://i.redd.it/")
+        return base
+    return None
 
 # Font presets — name → (serif, sans, google_fonts)
 FONT_PRESETS: dict[str, tuple[str, str, str]] = {
@@ -87,7 +115,7 @@ class LayoutGenerator:
                 "summary": e.summary or "",
                 "link": e.link or "",
                 "score": e.score,
-                "image_url": e.images[0] if e.images else None,  # automatic: first image
+                "image_url": resolve_image_url(e.images[0]) if e.images else None,  # automatic: first image
                 # TODO: LLM multi-draft selection — let LLM pick which entries get images
             }
             for e in entries
@@ -130,6 +158,19 @@ class LayoutGenerator:
         all_css = "\n".join([hero.css(), grid.css(), COVER_CSS])
         return "\n".join(html_parts), all_css
 
+    @staticmethod
+    def _entry_to_dict(entry: dict[str, Any]) -> dict[str, Any]:
+        """Convert internal entry dict to component-ready dict, sanitizing summary."""
+        summary = entry.get("summary", "")
+        # Strip image URLs that the LLM may have leaked into summary
+        summary = _strip_image_urls(summary)
+        return {
+            "title": entry.get("title", ""),
+            "summary": summary,
+            "link": entry.get("link", ""),
+            "image_url": entry.get("image_url"),
+        }
+
     def _parse_spec(self, text: str) -> dict[str, Any]:
         """Parse LLM response into layout spec."""
         try:
@@ -166,16 +207,14 @@ class LayoutGenerator:
                 continue
 
             if comp_type == "hero":
-                # Accept both "entry_guid" and "guid"
                 guid = comp.get("entry_guid") or comp.get("guid")
                 if guid and guid in self._entries:
-                    html_parts.append(module.render(self._entries[guid]))
+                    html_parts.append(module.render(self._entry_to_dict(self._entries[guid])))
                     css_parts.append(module.css())
                 else:
                     logger.warning("Hero component: no entry found for guid=%s", guid)
 
             elif comp_type == "grid":
-                # Accept entry_guids, guids (arrays) or single guid
                 guids = comp.get("entry_guids") or comp.get("guids", [])
                 if not guids and "guid" in comp:
                     guids = [comp["guid"]]
@@ -184,7 +223,7 @@ class LayoutGenerator:
                 entries = [self._entries[g] for g in guids if g in self._entries]
                 if entries:
                     columns = style.get("columns", 2)
-                    entry_dicts = [{"title": e["title"], "summary": e["summary"], "link": e.get("link", "")} for e in entries]
+                    entry_dicts = [self._entry_to_dict(e) for e in entries]
                     html_parts.append(module.render(entry_dicts, columns=columns))
                     css_parts.append(module.css())
 
@@ -196,7 +235,7 @@ class LayoutGenerator:
                     guids = [guids]
                 entries = [self._entries[g] for g in guids if g in self._entries]
                 if entries:
-                    entry_dicts = [{"title": e["title"], "summary": e["summary"], "link": e.get("link", "")} for e in entries]
+                    entry_dicts = [self._entry_to_dict(e) for e in entries]
                     html_parts.append(module.render(entry_dicts))
                     css_parts.append(module.css())
 
@@ -225,6 +264,20 @@ body {{
     font-size: 0.85rem;
     line-height: 1.5;
     color: var(--color-text);
+}}
+.topic-header {{
+    border-bottom: 2px solid var(--color-border);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}}
+.topic-header h2 {{
+    font-size: 1.2rem;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
+    color: var(--color-text-muted);
 }}
 .source-link {{
     font-size: 0.75rem;

@@ -75,45 +75,53 @@ class ComponentStrategy(NewspaperStrategy):
         output_dir = Path(self.config.output.directory).parent
         self.emitter = DebugEmitter(self.config.debug, output_dir, edition_slug)
 
-        # Step 1: Cluster
-        with self.emitter.timer("cluster"):
-            entries_by_topic = self._cluster(entries)
-        self.emitter.save_json("cluster.json", {t: len(v) for t, v in entries_by_topic.items()})
+        try:
+            # Step 1: Cluster
+            with self.emitter.timer("cluster"):
+                entries_by_topic = self._cluster(entries)
+            self.emitter.save_json("cluster.json", {t: len(v) for t, v in entries_by_topic.items()})
 
-        if not entries_by_topic:
-            return {"entries": len(entries), "topics": 0, "files": []}
+            if not entries_by_topic:
+                return {"entries": len(entries), "topics": 0, "files": []}
 
-        logger.info("Clustered into %d topics: %s", len(entries_by_topic), list(entries_by_topic.keys()))
+            logger.info("Clustered into %d topics: %s", len(entries_by_topic), list(entries_by_topic.keys()))
 
-        # Step 2: Design topic pages (iterative)
-        topic_pages: dict[str, DesignedPage] = {}
-        for topic, topic_entries in entries_by_topic.items():
-            page = self._design_topic(topic_entries, topic)
-            topic_pages[topic] = page
+            # Step 2: Design topic pages (iterative)
+            topic_pages: dict[str, DesignedPage] = {}
+            for topic, topic_entries in entries_by_topic.items():
+                page = self._design_topic(topic_entries, topic)
+                topic_pages[topic] = page
 
-        # Step 3: Design cover
-        with self.emitter.timer("cover"):
-            cover_html, cover_css = self.cover_designer.design(entries_by_topic)
-        self.emitter.save_text("cover.html", cover_html)
+            # Step 3: Design cover
+            with self.emitter.timer("cover"):
+                cover_html, cover_css = self.cover_designer.design(entries_by_topic)
+            self.emitter.save_text("cover.html", cover_html)
 
-        # Step 4: Assemble edition
-        output_dir = self._setup_output()
-        files = self._assemble(output_dir, cover_html, cover_css, topic_pages)
+            # Step 4: Assemble edition
+            output_dir = self._setup_output()
+            files = self._assemble(output_dir, cover_html, cover_css, topic_pages)
 
-        # Step 5: Mark entries as processed
-        guids = [e.guid for e in entries]
-        edition_date = date.today().isoformat()
-        slot = self._get_slot()
-        db.mark_processed(guids, edition_date, slot)
+            # Step 5: Mark entries as processed + record edition
+            guids = [e.guid for e in entries]
+            edition_date = date.today().isoformat()
+            slot = self._get_slot()
+            db.mark_processed(guids, edition_date, slot)
+            # Record in editions table so the UI can find it
+            # Note: edition dir is {date}-{slot}, not design-{date}-{slot}
+            edition_dir = output_dir / f"{edition_date}-{slot}"
+            cover_path = str(edition_dir / "cover.html")
+            edition_pdf = str(edition_dir / "edition.pdf")
+            db.record_edition(edition_date, slot, cover_path, edition_pdf, len(entries))
 
-        self.emitter.log_step("complete", topics=len(topic_pages), files=len(files))
-        self.emitter.close()
-        logger.info("Designed edition: %d topics, %d files", len(topic_pages), len(files))
-        return {
-            "entries": len(entries),
-            "topics": len(topic_pages),
-            "files": files,
-        }
+            self.emitter.log_step("complete", topics=len(topic_pages), files=len(files))
+            logger.info("Designed edition: %d topics, %d files", len(topic_pages), len(files))
+            return {
+                "entries": len(entries),
+                "topics": len(topic_pages),
+                "files": files,
+            }
+        finally:
+            self.emitter.close()
 
     def _design_topic(self, entries: list[FeedEntry], topic: str) -> DesignedPage:
         """Design a topic page with iterative feedback."""
@@ -140,7 +148,7 @@ class ComponentStrategy(NewspaperStrategy):
 
             # Render screenshot + evaluate
             try:
-                screenshot = self.renderer.to_image(html, css)
+                screenshot = self.renderer.to_image(html, css, topic)
                 self.emitter.save_bytes(f"{safe_topic}/iter{iteration}.png", screenshot)
             except Exception as exc:
                 logger.warning("Screenshot failed for '%s': %s — text-only eval", topic, exc)
@@ -220,12 +228,12 @@ class ComponentStrategy(NewspaperStrategy):
         for topic, page in topic_pages.items():
             safe_topic = topic.lower().replace(" ", "-").replace("/", "-")
             topic_html_path = topics_dir / f"{safe_topic}.html"
-            self._write_page(topic_html_path, page.html, page.css)
+            self._write_page(topic_html_path, page.html, page.css, topic)
             files.append(str(topic_html_path))
 
             try:
                 topic_pdf_path = topics_dir / f"{safe_topic}.pdf"
-                pdf_bytes = self.renderer.to_pdf(page.html, page.css)
+                pdf_bytes = self.renderer.to_pdf(page.html, page.css, topic)
                 topic_pdf_path.write_bytes(pdf_bytes)
                 files.append(str(topic_pdf_path))
             except Exception as exc:
@@ -244,8 +252,11 @@ class ComponentStrategy(NewspaperStrategy):
         return files
 
     @staticmethod
-    def _write_page(path: Path, html: str, css: str) -> None:
+    def _write_page(path: Path, html: str, css: str, topic: str | None = None) -> None:
         """Write a complete HTML page."""
+        topic_header = ""
+        if topic:
+            topic_header = f'<header class="topic-header"><h2>{topic}</h2></header>'
         combined = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -253,6 +264,7 @@ class ComponentStrategy(NewspaperStrategy):
 <style>{css}</style>
 </head>
 <body>
+{topic_header}
 {html}
 </body>
 </html>

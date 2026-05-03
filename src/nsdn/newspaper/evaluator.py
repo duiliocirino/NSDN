@@ -57,7 +57,7 @@ class Evaluator:
             return score, response
         except Exception as exc:
             logger.warning("Text evaluation failed: %s", exc)
-            return 5.0, f"Evaluation failed: {exc}"
+            return 4.0, f"Evaluation failed: {exc}"
 
     def _evaluate_vlm(self, screenshot: bytes, topic: str) -> tuple[float, str]:
         """Evaluate the rendered screenshot via VLM.
@@ -73,7 +73,7 @@ class Evaluator:
             return self._evaluate_vlm_multimodal(screenshot, topic)
         except Exception as exc:
             logger.info("VLM multimodal evaluation not available, using text fallback: %s", exc)
-            return 5.0, "VLM evaluation not available (multimodal model required)"
+            return 4.0, "VLM evaluation not available (multimodal model required)"
 
     def _evaluate_vlm_multimodal(self, screenshot: bytes, topic: str) -> tuple[float, str]:
         """Attempt multimodal VLM evaluation.
@@ -169,4 +169,4 @@ class Evaluator:
         for ch in text:
             if ch.isdigit():
                 return float(ch)
-        return 5.0
+        return 4.0

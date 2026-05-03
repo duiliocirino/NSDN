@@ -8,11 +8,11 @@ def render(entries: list[dict], css_vars: dict | None = None) -> str:
     css_vars = css_vars or {}
     items = ""
     for entry in entries:
-        link_html = f'<a href="{entry["link"]}" class="source-link">— [Source ↗]({entry["link"]})</a>' if entry.get("link") else ""
+        source_html = f'<a href="{entry["link"]}" class="source-link" target="_blank" rel="noopener">Source ↗</a>' if entry.get("link") else ""
         items += f"""
         <div class="sidebar-item">
             <h4>{entry["title"]}</h4>
-            {link_html}
+            {source_html}
         </div>
         """
     return f'<aside class="sidebar">{items}</aside>'

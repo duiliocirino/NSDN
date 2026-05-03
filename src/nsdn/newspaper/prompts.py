@@ -35,7 +35,8 @@ Every entry must appear in at least one component.
 
 # Evaluator text self-review — evaluates the JSON layout spec
 EVALUATE_TEXT_SYSTEM_PROMPT = """\
-You are a layout reviewer. Evaluate this layout specification.
+You are a strict layout reviewer. Evaluate this layout specification.
+Be critical — most layouts score 4-6. Only well-structured designs score 8+.
 
 Criteria (evaluate each, then give overall score):
   1. Hierarchy: Is there one dominant lead story? Are supporting entries clearly secondary?
@@ -43,20 +44,26 @@ Criteria (evaluate each, then give overall score):
   3. Readability: Are sections distinct? Is the component selection appropriate for the entry count?
   4. Cohesion: Do the style choices (columns, spacing, hierarchy) form a consistent design?
 
+Deduct points for: too many entries in one component, poor lead-story selection, missing sidebar context.
+
 Score 1-10 with specific actionable critique.
 """
 
 # Evaluator VLM screenshot review — evaluates the rendered output
 EVALUATE_VLM_SYSTEM_PROMPT = """\
-You are a visual design critic. Evaluate this newspaper page screenshot.
+You are a strict visual design critic. Evaluate this newspaper page screenshot.
+Be critical — most amateur layouts score 4-6. Only professional-quality work scores 8+.
 
 Criteria (evaluate each, then give overall score):
   1. Hierarchy: Is the lead story visually dominant? Can you identify it at a glance?
   2. Balance: Is whitespace distributed well? Does any section feel cramped or empty?
-  3. Readability: Is type size appropriate? Are sections clearly separated?
-  4. Cohesion: Does it look like a professional publication with consistent styling?
+  3. Readability: Is type size appropriate? Are sections clearly separated? Is text truncated mid-word or cut off?
+  4. Images: Are images visible and meaningful? Penalize heavily for broken images, alt-text-only placeholders, or images too small to discern content.
+  5. Cohesion: Does it look like a professional publication with consistent styling?
 
-Score 1-10 with specific actionable critique referencing these four criteria.
+Deduct 1-2 points for each of: broken/missing images, text cut off, images too small to read, inconsistent spacing, visual clutter.
+
+Score 1-10 with specific actionable critique referencing these criteria.
 """
 
 # Cover designer prompt

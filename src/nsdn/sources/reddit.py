@@ -92,10 +92,9 @@ class RedditSource(EntrySource):
             created_utc = data.get("created_utc")
             published_at = datetime.fromtimestamp(created_utc, tz=timezone.utc) if created_utc else None
 
-            # Link
+            # Link: always use Reddit permalink so users can read the discussion.
+            # External URLs (corriere.it, etc.) lose the Reddit context.
             url = f"https://reddit.com{data['permalink']}"
-            if not data.get("is_self"):
-                url = data.get("url", url)
 
             # Tags
             tags = [f"r/{self.subreddit}"]
