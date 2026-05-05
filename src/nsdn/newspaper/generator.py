@@ -92,6 +92,7 @@ class LayoutGenerator:
         llm: LLMProvider,
         enabled_layouts: list[str] | None = None,
         fonts: dict[str, str] | None = None,
+        colors: dict[str, str] | None = None,
     ):
         self.llm = llm
         self.enabled_layouts = enabled_layouts or list(LAYOUT_MODULES.keys())
@@ -99,6 +100,13 @@ class LayoutGenerator:
             "serif": "Georgia, 'Times New Roman', serif",
             "sans": "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
             "google_fonts": "",
+        }
+        self.colors = colors or {
+            "text": "#333",
+            "text-muted": "#555",
+            "border": "#333",
+            "border-light": "#eee",
+            "accent": "#0066cc",
         }
         self._entries: dict[str, dict[str, Any]] = {}
 
@@ -196,7 +204,7 @@ class LayoutGenerator:
         style = layout.get("style", {})
 
         html_parts: list[str] = []
-        css_parts: list[str] = [_build_base_css(self.fonts)]
+        css_parts: list[str] = [_build_base_css(self.fonts, self.colors)]
 
         for comp in components:
             # Normalize: LLM may send "Hero", "Grid", etc.
@@ -242,17 +250,24 @@ class LayoutGenerator:
         return "\n".join(html_parts), "\n".join(css_parts)
 
 
-def _build_base_css(fonts: dict[str, str]) -> str:
-    """Generate base CSS with configurable fonts."""
+def _build_base_css(fonts: dict[str, str], colors: dict[str, str] | None = None) -> str:
+    """Generate base CSS with configurable fonts and colors."""
+    colors = colors or {
+        "text": "#333",
+        "text-muted": "#555",
+        "border": "#333",
+        "border-light": "#eee",
+        "accent": "#0066cc",
+    }
     google_import = f"@import url('{fonts['google_fonts']}');" if fonts.get("google_fonts") else ""
     return f"""
 {google_import}
 :root {{
-    --color-text: #333;
-    --color-text-muted: #555;
-    --color-border: #333;
-    --color-border-light: #eee;
-    --color-accent: #0066cc;
+    --color-text: {colors["text"]};
+    --color-text-muted: {colors["text-muted"]};
+    --color-border: {colors["border"]};
+    --color-border-light: {colors["border-light"]};
+    --color-accent: {colors["accent"]};
     --font-serif: {fonts["serif"]};
     --font-sans: {fonts["sans"]};
 }}
@@ -266,18 +281,36 @@ body {{
     color: var(--color-text);
 }}
 .topic-header {{
-    border-bottom: 2px solid var(--color-border);
-    padding-bottom: 0.5rem;
-    margin-bottom: 1.5rem;
     text-align: center;
+    margin: 2rem 0 2.5rem;
+    padding-bottom: 1.5rem;
+    position: relative;
+}}
+.topic-header::before {{
+    content: "";
+    display: block;
+    height: 3px;
+    background: var(--color-accent);
+    margin: 0 auto 1rem;
+    width: 60px;
+}}
+.topic-header::after {{
+    content: "";
+    display: block;
+    height: 1px;
+    background: var(--color-border-light);
+    margin: 1rem auto 0;
+    width: 100%;
 }}
 .topic-header h2 {{
-    font-size: 1.2rem;
+    font-size: 1.6rem;
     font-family: var(--font-sans);
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.12em;
     margin: 0;
-    color: var(--color-text-muted);
+    color: var(--color-text);
+    line-height: 1.2;
 }}
 .source-link {{
     font-size: 0.75rem;

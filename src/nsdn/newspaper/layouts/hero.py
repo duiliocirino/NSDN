@@ -8,7 +8,7 @@ def render(entry: dict, css_vars: dict | None = None) -> str:
     css_vars = css_vars or {}
     image_html = ''
     if entry.get("image_url"):
-        image_html = f'<div class="hero-image"><img src="{entry["image_url"]}" alt="{entry["title"]}" loading="lazy"></div>'
+        image_html = f'<div class="hero-image"><img src="{entry["image_url"]}" alt="{entry["title"]}" loading="lazy" onerror="this.style.display=\'none\'"></div>'
     source_html = f'<a href="{entry["link"]}" class="source-link" target="_blank" rel="noopener">Source ↗</a>' if entry.get("link") else ""
     return f"""
     <article class="hero">

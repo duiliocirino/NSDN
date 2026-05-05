@@ -11,7 +11,7 @@ def render(entries: list[dict], columns: int = 2, css_vars: dict | None = None) 
         source_html = f'<a href="{entry["link"]}" class="source-link" target="_blank" rel="noopener">Source ↗</a>' if entry.get("link") else ""
         image_html = ''
         if entry.get("image_url"):
-            image_html = f'<img class="grid-thumb" src="{entry["image_url"]}" alt="{entry["title"]}" loading="lazy">'
+            image_html = f'<img class="grid-thumb" src="{entry["image_url"]}" alt="{entry["title"]}" loading="lazy" onerror="this.style.display=\'none\'">'
         # Truncate to ~180 chars but don't split words
         summary = entry.get("summary", "")
         if len(summary) > 180:

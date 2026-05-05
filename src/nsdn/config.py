@@ -112,6 +112,15 @@ class NewspaperConfig(BaseModel):
             "google_fonts": "",  # @import URL for Google Fonts (optional)
         }
     )
+    colors: dict[str, str] = Field(
+        default_factory=lambda: {
+            "text": "#333",
+            "text-muted": "#555",
+            "border": "#333",
+            "border-light": "#eee",
+            "accent": "#0066cc",
+        }
+    )
 
 
 class AppConfig(BaseModel):

@@ -329,6 +329,12 @@ newspaper:
     serif: "Georgia, 'Times New Roman', serif"
     sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     google_fonts: ""          # Optional: Google Fonts @import URL
+  colors:                     # Customizable color palette
+    text: "#333"
+    text-muted: "#555"
+    border: "#333"
+    border-light: "#eee"
+    accent: "#0066cc"
   evaluation:
     text_weight: 0.3
     vlm_weight: 0.7

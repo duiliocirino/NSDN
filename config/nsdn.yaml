@@ -109,6 +109,12 @@ output:
 
 newspaper:
   font_preset: "editorial"  # classic | editorial | modern | newspaper
+  colors:
+    text: "#333"
+    text-muted: "#555"
+    border: "#333"
+    border-light: "#eee"
+    accent: "#cc6600"
 
 retention:
   keep_days: 30

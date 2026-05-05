@@ -47,6 +47,7 @@ class ComponentStrategy(NewspaperStrategy):
             design_llm,
             config.newspaper.layouts,
             fonts=resolve_fonts(config.newspaper.font_preset, config.newspaper.fonts or None),
+            colors=config.newspaper.colors or None,
         )
         self.renderer = Renderer({
             "viewport": config.newspaper.viewport,
@@ -283,6 +284,7 @@ class ComponentStrategy(NewspaperStrategy):
 
         for topic, page in topic_pages.items():
             html_parts.append('<div style="page-break-before: always"></div>')
+            html_parts.append(f'<header class="topic-header"><h2>{topic}</h2></header>')
             html_parts.append(page.html)
             css_set.add(page.css)
 
