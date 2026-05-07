@@ -57,11 +57,19 @@ class LLMClusterStrategy(ClusterStrategy):
             if topic in limits:
                 groups[topic] = groups[topic][: limits[topic]]
 
+        # Remove empty topics (LLM can return topics with invalid/empty guids)
+        groups = {topic: entries for topic, entries in groups.items() if entries}
+
         # Soft cap: if too many topics, drop smallest
         max_sections = self.config.synthesize.max_sections
         if len(groups) > max_sections:
             sorted_topics = sorted(groups.items(), key=lambda x: len(x[1]), reverse=True)
             groups = dict(sorted_topics[:max_sections])
+
+        # If all topics were empty, fall back to single "General" topic
+        if not groups:
+            logger.warning("Clustering produced no valid topics — falling back to General")
+            return {"General": entries}
 
         return groups
 
