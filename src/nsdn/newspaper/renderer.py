@@ -58,28 +58,28 @@ class Renderer:
     def to_pdf(self, html: str, css: str, topic: str | None = None) -> bytes:
         """Render HTML to PDF via WeasyPrint."""
         try:
-            from weasyprint import HTML
+            from weasyprint import CSS, HTML
         except ImportError:
             raise ImportError("Install weasyprint: poetry add weasyprint")
 
         combined = self._combine_html_css(html, css, topic)
         doc = HTML(string=combined)
-        margin = self.pdf_config.get("margin", "20mm")
         format_size = self.pdf_config.get("format", "A4")
-        # Use @page for margins, not * { padding } which inflates every element
+        # @page rule with zero margin via separate stylesheet (matching screenshot viewport)
         # Allow high-res images (WeasyPrint defaults to 300dpi, we want full resolution)
+        page_stylesheet = CSS(string=self._page_css(format_size))
         pdf_bytes = doc.write_pdf(
-            presentation={
-                "@page": {
-                    "size": format_size,
-                    "margin": margin,
-                },
-            },
-            maximum_reserved_images=20,  # Allow more images in cache
+            stylesheets=[page_stylesheet],
+            maximum_reserved_images=20,
         )
         if pdf_bytes is None:
             raise ValueError("PDF generation failed")
         return pdf_bytes
+
+    @staticmethod
+    def _page_css(format_size: str) -> str:
+        """Generate @page rule for PDF — zero margin to match screenshot."""
+        return f"@page {{ size: {format_size}; margin: 0; }}"
 
     def to_string(self, html: str, css: str) -> str:
         """Return combined HTML string for text review."""
