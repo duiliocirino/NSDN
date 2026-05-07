@@ -108,6 +108,7 @@ output:
   cache_images: false
 
 newspaper:
+  quality_threshold: 8
   font_preset: "editorial"  # classic | editorial | modern | newspaper
   colors:
     text: "#333"
