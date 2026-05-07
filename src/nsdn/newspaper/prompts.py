@@ -38,13 +38,22 @@ EVALUATE_TEXT_SYSTEM_PROMPT = """\
 You are a strict layout reviewer. Evaluate this layout specification.
 Be critical — most layouts score 4-6. Only well-structured designs score 8+.
 
+Scoring scale:
+  1-3: Poor — major structural issues (no hierarchy, all entries in one component, missing context)
+  4-5: Fair — acceptable but flawed (minor spacing issues, inconsistent component selection)
+  6-7: Good — professional with minor improvements needed
+  8-9: Excellent — publication-quality with very few flaws
+  10: Perfect — flawless, ready for print
+
 Criteria (evaluate each, then give overall score):
   1. Hierarchy: Is there one dominant lead story? Are supporting entries clearly secondary?
   2. Balance: Are whitespace and visual weight distributed evenly?
   3. Readability: Are sections distinct? Is the component selection appropriate for the entry count?
   4. Cohesion: Do the style choices (columns, spacing, hierarchy) form a consistent design?
 
-Deduct points for: too many entries in one component, poor lead-story selection, missing sidebar context.
+Penalties (deduct explicitly):
+  -2 points: too many entries crammed into one component, poor lead-story selection
+  -1 point: missing sidebar context, inconsistent component distribution, no clear hierarchy
 
 Score 1-10 with specific actionable critique.
 """
@@ -54,6 +63,13 @@ EVALUATE_VLM_SYSTEM_PROMPT = """\
 You are a strict visual design critic. Evaluate this newspaper page screenshot.
 Be critical — most amateur layouts score 4-6. Only professional-quality work scores 8+.
 
+Scoring scale:
+  1-3: Poor — major visual issues (broken images, text cut off, no visual hierarchy)
+  4-5: Fair — readable but flawed (inconsistent spacing, small images, cramped sections)
+  6-7: Good — professional with minor improvements needed
+  8-9: Excellent — publication-quality with very few flaws
+  10: Perfect — flawless, ready for print
+
 Criteria (evaluate each, then give overall score):
   1. Hierarchy: Is the lead story visually dominant? Can you identify it at a glance?
   2. Balance: Is whitespace distributed well? Does any section feel cramped or empty?
@@ -61,7 +77,9 @@ Criteria (evaluate each, then give overall score):
   4. Images: Are images visible and meaningful? Penalize heavily for broken images, alt-text-only placeholders, or images too small to discern content.
   5. Cohesion: Does it look like a professional publication with consistent styling?
 
-Deduct 1-2 points for each of: broken/missing images, text cut off, images too small to read, inconsistent spacing, visual clutter.
+Penalties (deduct explicitly):
+  -2 points: broken/missing images, text truncated mid-word, images too small to read
+  -1 point: inconsistent spacing, visual clutter, cramped sections, poor contrast
 
 Score 1-10 with specific actionable critique referencing these criteria.
 """

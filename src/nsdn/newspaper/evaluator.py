@@ -87,16 +87,7 @@ class Evaluator:
         import base64
         from nsdn.llm import LlamaServerProvider, OllamaProvider
 
-        prompt = (
-            f"Topic: {topic}\n\n"
-            f"Evaluate this newspaper page screenshot.\n\n"
-            f"Criteria:\n"
-            f"1. Hierarchy: Is the lead story visually dominant?\n"
-            f"2. Balance: Is whitespace distributed well?\n"
-            f"3. Readability: Is type size appropriate?\n"
-            f"4. Cohesion: Does it look professional?\n\n"
-            f"Score 1-10 with specific critique."
-        )
+        user_prompt = f"Topic: {topic}\n\nEvaluate this newspaper page screenshot."
 
         if isinstance(self.evaluate_llm, LlamaServerProvider):
             normalized = self._prepare_image_for_llama_server(screenshot)
@@ -105,9 +96,13 @@ class Evaluator:
                 model=self.evaluate_llm.model,
                 messages=[
                     {
+                        "role": "system",
+                        "content": prompts.EVALUATE_VLM_SYSTEM_PROMPT,
+                    },
+                    {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": prompt},
+                            {"type": "text", "text": user_prompt},
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
                         ],
                     }
@@ -118,9 +113,12 @@ class Evaluator:
         elif isinstance(self.evaluate_llm, OllamaProvider):
             resp = self.evaluate_llm.client.chat(
                 model=self.evaluate_llm.model,
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": prompts.EVALUATE_VLM_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
                 images=[screenshot],
-                options={"temperature": 0.0},
+                options={"temperature": 0.6},
             )
             content = resp.message.content  # type: ignore[union-attr]
         else:
