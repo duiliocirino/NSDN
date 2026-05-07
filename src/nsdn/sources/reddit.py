@@ -54,23 +54,69 @@ class RedditSource(EntrySource):
         data = resp.json()
         return data["data"]["children"]
 
+    _BLOCKED_DOMAINS = ("external-preview.redd.it", "preview.redd.it")
+
+    def _is_valid_image_url(self, url: str) -> bool:
+        """Check if a URL is a valid, high-resolution image."""
+        if not url:
+            return False
+        for domain in self._BLOCKED_DOMAINS:
+            if domain in url:
+                return False
+        return True
+
     def _extract_images(self, post: dict) -> list[str]:
+        """Extract images from a Reddit post with full resolution priority.
+        
+        Priority order:
+        1. Gallery posts: media_metadata (highest resolution)
+        2. Image posts: url field (i.redd.it full resolution)
+        3. Videos: secure_media.reddit_video.fallback_url
+        4. Fallback: i.redd.it thumbnail only
+        
+        external-preview.redd.it URLs are rejected entirely — they return 403/404
+        and cannot be converted to i.redd.it (different content hash per CDN).
+        """
         images: list[str] = []
-        # Thumbnail
-        thumbnail = post.get("thumbnail", "")
-        if thumbnail and not thumbnail.startswith(("self", "default", "icon", "nsfw")):
-            images.append(thumbnail)
-        # Preview images
-        preview = post.get("preview", {})
-        if preview:
-            first_img = preview.get("images", [{}])[0] if preview.get("images") else {}
-            url = first_img.get("url")
-            if url:
+        
+        # 1. Gallery posts - extract from media_metadata
+        if post.get("gallery_data"):
+            gallery_items = post.get("gallery_data", {}).get("items", [])
+            media_metadata = post.get("media_metadata", {})
+            for item in gallery_items:
+                media_id = item.get("media_id")
+                if media_id:
+                    meta = media_metadata.get(media_id, {})
+                    if meta:
+                        # Get highest resolution from available resolutions
+                        resolutions = meta.get("p", [])
+                        if resolutions:
+                            # Sort by width, get largest
+                            largest = max(resolutions, key=lambda x: x.get("x", 0))
+                            url = largest.get("u")
+                            if url and url not in images and self._is_valid_image_url(url):
+                                images.append(url)
+        
+        # 2. Direct image posts (i.redd.it URL)
+        elif post.get("is_self") is False and post.get("url", "").startswith("https://i.redd.it"):
+            url = post["url"]
+            if url and url not in images and self._is_valid_image_url(url):
                 images.append(url)
-        # Post thumbnail (for link posts)
-        if post.get("is_self") is False and post.get("thumb") and not post["thumb"].startswith(("self", "default", "icon", "nsfw")):
-            if post["thumb"] not in images:
-                images.append(post["thumb"])
+        
+        # 3. Video posts
+        elif post.get("secure_media"):
+            secure_media = post.get("secure_media", {})
+            if secure_media.get("reddit_video"):
+                video_url = secure_media["reddit_video"].get("fallback_url")
+                if video_url and video_url not in images and self._is_valid_image_url(video_url):
+                    images.append(video_url)
+        
+        # 4. Fallback: i.redd.it thumbnail only (reject external-preview, they're broken)
+        if not images:
+            thumbnail = post.get("thumbnail", "")
+            if thumbnail and thumbnail.startswith("https://i.redd.it/") and self._is_valid_image_url(thumbnail):
+                images.append(thumbnail)
+        
         return images
 
     def fetch(self) -> list[FeedEntry]:

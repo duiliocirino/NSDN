@@ -1,5 +1,14 @@
 ## Future Steps for Newspaper Generator
 
+### **Completed**
+- [x] **Structured Image Extraction** — Priority-based `_extract_images()` (gallery → media_metadata, image → i.redd.it, video → secure_media, fallback → i.redd.it thumbnail only). external-preview.redd.it rejected (blocked). Test suite: 30/30 pass.
+- [x] **Color Configuration System** — Configurable palette in `config.py`, CSS variables in `generator.py`, `preview_colors.py` script.
+- [x] **Topic Header Enhancement** — Newspaper-style `.topic-header` CSS with `::before`/`::after` pseudo-elements.
+- [x] **Evaluator Criticality** — Enhanced scoring scale (1-10) with explicit penalties in `EVALUATE_TEXT_SYSTEM_PROMPT`.
+- [x] **PDF Margin Fix** — `@page { margin: 0 }` CSS instead of ignored `presentation` dict.
+- [x] **Clustering Bug Fix** — Empty topic filtering with "General" fallback in `llm_cluster.py`.
+- [x] **VLM Prompt Fix** — `EVALUATE_VLM_SYSTEM_PROMPT` now used (was hardcoded prompt).
+
 ### **High Priority (Next Actions)**
 1. **Register 'template' Strategy**
    - Location: `src/nsdn/newspaper/__init__.py`
