@@ -24,6 +24,7 @@ dependencies = [
     "llama-cpp-python>=0.1",
     "playwright (>=1.58.0,<2.0.0)",
     "weasyprint (>=68.1,<69.0)",
+    "pypdfium2 (>=5.8.0,<6.0.0)",
 ]
 
 [project.scripts]
