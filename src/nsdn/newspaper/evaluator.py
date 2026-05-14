@@ -48,6 +48,24 @@ class Evaluator:
         critique = f"Text review ({text_score:.1f}/10): {text_critique}\n\nVLM review ({vlm_score:.1f}/10): {vlm_critique}"
         return final_score, critique
 
+    def evaluate_multipage(self, page_images: list[bytes], layout_spec: str, topic: str) -> tuple[float, str]:
+        """Evaluate a multi-page topic spread.
+
+        Args:
+            page_images: List of PNG bytes, one per page.
+            layout_spec: JSON layout spec from the generator.
+            topic: Topic name for context.
+
+        Returns:
+            (score, critique) — combined score and actionable critique.
+        """
+        text_score, text_critique = self._evaluate_text(layout_spec)
+        vlm_score, vlm_critique = self._evaluate_vlm_multipage(page_images, topic)
+
+        final_score = (text_score * self.text_weight) + (vlm_score * self.vlm_weight)
+        critique = f"Text review ({text_score:.1f}/10): {text_critique}\n\nVLM review ({vlm_score:.1f}/10) — {len(page_images)} pages: {vlm_critique}"
+        return final_score, critique
+
     def _evaluate_text(self, layout_spec: str) -> tuple[float, str]:
         """Evaluate the JSON layout spec."""
         user_prompt = prompts.build_evaluate_text_prompt(layout_spec)
@@ -118,6 +136,68 @@ class Evaluator:
                     {"role": "user", "content": user_prompt},
                 ],
                 images=[screenshot],
+                options={"temperature": 0.6},
+            )
+            content = resp.message.content  # type: ignore[union-attr]
+        else:
+            raise ValueError(
+                f"Multimodal evaluation not supported for provider: {type(self.evaluate_llm).__name__}"
+            )
+
+        score = self._parse_score(content)
+        return score, content
+
+    def _evaluate_vlm_multipage(self, page_images: list[bytes], topic: str) -> tuple[float, str]:
+        """Evaluate multiple page screenshots via VLM.
+
+        Passes all pages to the VLM as separate image messages.
+        """
+        if self.evaluate_llm is None:
+            raise ValueError("No evaluate LLM configured")
+
+        import base64
+        from nsdn.llm import LlamaServerProvider, OllamaProvider
+
+        num_pages = len(page_images)
+        user_prompt = (
+            f"Topic: {topic}\n\n"
+            f"You are evaluating {num_pages} pages of a newspaper topic spread.\n"
+            f"Each image is a separate page. Evaluate the entire spread as a cohesive unit."
+        )
+
+        if isinstance(self.evaluate_llm, LlamaServerProvider):
+            normalized = [self._prepare_image_for_llama_server(img) for img in page_images]
+            images_b64 = [base64.b64encode(img).decode("utf-8") for img in normalized]
+
+            messages = [
+                {"role": "system", "content": prompts.EVALUATE_VLM_MULTIPAGE_SYSTEM_PROMPT.format(num_pages=num_pages)},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_prompt},
+                    ] + [
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
+                        for b64 in images_b64
+                    ],
+                },
+            ]
+
+            resp = self.evaluate_llm.client.chat.completions.create(
+                model=self.evaluate_llm.model,
+                messages=messages,
+                temperature=0.6,
+            )
+            content = resp.choices[0].message.content
+
+        elif isinstance(self.evaluate_llm, OllamaProvider):
+            normalized = [self._prepare_image_for_llama_server(img) for img in page_images]
+            resp = self.evaluate_llm.client.chat(
+                model=self.evaluate_llm.model,
+                messages=[
+                    {"role": "system", "content": prompts.EVALUATE_VLM_MULTIPAGE_SYSTEM_PROMPT.format(num_pages=num_pages)},
+                    {"role": "user", "content": user_prompt},
+                ],
+                images=normalized,
                 options={"temperature": 0.6},
             )
             content = resp.message.content  # type: ignore[union-attr]

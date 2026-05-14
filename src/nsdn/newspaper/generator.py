@@ -93,6 +93,7 @@ class LayoutGenerator:
         enabled_layouts: list[str] | None = None,
         fonts: dict[str, str] | None = None,
         colors: dict[str, str] | None = None,
+        viewport_modes: dict[str, Any] | None = None,
     ):
         self.llm = llm
         self.enabled_layouts = enabled_layouts or list(LAYOUT_MODULES.keys())
@@ -108,10 +109,22 @@ class LayoutGenerator:
             "border-light": "#eee",
             "accent": "#0066cc",
         }
+        self._viewport_modes = viewport_modes or {}
         self._entries: dict[str, dict[str, Any]] = {}
 
     def generate(self, entries: list[FeedEntry], topic: str, feedback: str = "") -> tuple[str, str, str]:
-        """Generate layout spec via LLM, render to HTML/CSS.
+        """Generate layout spec via LLM, render desktop HTML/CSS.
+
+        Returns:
+            (html, css, layout_spec_json)
+        """
+        return self.generate_mode(entries, topic, feedback, mode="desktop")
+
+    def generate_mode(self, entries: list[FeedEntry], topic: str, feedback: str = "", mode: str = "desktop") -> tuple[str, str, str]:
+        """Generate layout spec via LLM, render for a specific viewport mode.
+
+        On first call (any mode), the LLM is invoked once to produce the layout spec.
+        Subsequent calls for other modes reuse the cached spec and just re-render.
 
         Returns:
             (html, css, layout_spec_json)
@@ -123,20 +136,30 @@ class LayoutGenerator:
                 "summary": e.summary or "",
                 "link": e.link or "",
                 "score": e.score,
-                "image_url": resolve_image_url(e.images[0]) if e.images else None,  # automatic: first image
-                # TODO: LLM multi-draft selection — let LLM pick which entries get images
+                "image_url": resolve_image_url(e.images[0]) if e.images else None,
             }
             for e in entries
         }
-        entry_dicts = list(self._entries.values())
-        user_prompt = prompts.build_design_prompt(topic, entry_dicts, feedback)
-        spec_text = self.llm.invoke(user_prompt, system_message=prompts.DESIGN_SYSTEM_PROMPT, temperature=0.7)
-        layout_spec = self._parse_spec(spec_text)
-        html, css = self._render(layout_spec)
+
+        # Cache: invoke LLM only once per generate cycle
+        if not hasattr(self, "_cached_layout_spec"):
+            entry_dicts = list(self._entries.values())
+            user_prompt = prompts.build_design_prompt(topic, entry_dicts, feedback)
+            spec_text = self.llm.invoke(user_prompt, system_message=prompts.DESIGN_SYSTEM_PROMPT, temperature=0.7)
+            self._cached_layout_spec = self._parse_spec(spec_text)
+
+        layout_spec = self._cached_layout_spec
+        html, css = self._render(layout_spec, mode=mode)
         return html, css, json.dumps(layout_spec, indent=2)
 
-    def generate_cover(self, highlights: list[FeedEntry], entries_by_topic: dict[str, list[FeedEntry]], date: str, slot: str) -> tuple[str, str]:
-        """Generate cover page HTML/CSS."""
+    def clear_cache(self) -> None:
+        """Clear the cached layout spec (call between topics)."""
+        if hasattr(self, "_cached_layout_spec"):
+            delattr(self, "_cached_layout_spec")
+
+    def generate_cover(self, highlights: list[FeedEntry], entries_by_topic: dict[str, list[FeedEntry]], date: str, slot: str, mode: str = "desktop") -> tuple[str, str]:
+        """Generate cover page HTML/CSS for a specific viewport mode."""
+        columns = 2 if mode == "desktop" else 1
         html_parts: list[str] = []
         html_parts.append(f"""
         <header class="cover-header">
@@ -151,7 +174,7 @@ class LayoutGenerator:
                 "title": best.title,
                 "summary": best.summary or "",
                 "link": best.link or "",
-            }))
+            }, mode=mode))
         else:
             raise NotImplementedError("No highlights for cover design")
 
@@ -161,7 +184,7 @@ class LayoutGenerator:
                 {"title": e.title, "summary": e.summary or "", "link": e.link or ""}
                 for e in remaining
             ]
-            html_parts.append(grid.render(entry_dicts, columns=2))
+            html_parts.append(grid.render(entry_dicts, columns=columns, mode=mode))
 
         all_css = "\n".join([hero.css(), grid.css(), COVER_CSS])
         return "\n".join(html_parts), all_css
@@ -197,14 +220,27 @@ class LayoutGenerator:
         logger.warning("Could not parse layout spec, using fallback")
         return {"layout": {"components": [], "style": {}}}
 
-    def _render(self, spec: dict[str, Any]) -> tuple[str, str]:
-        """Render layout spec to HTML/CSS."""
+    def _render(self, spec: dict[str, Any], mode: str = "desktop") -> tuple[str, str]:
+        """Render layout spec to HTML/CSS for a given viewport mode."""
         layout = spec.get("layout", {})
         components = layout.get("components", [])
         style = layout.get("style", {})
-
+        
+        # Get viewport config for this mode
+        viewport_cfg = {}
+        if hasattr(self, "_viewport_modes") and mode in self._viewport_modes:
+            vp = self._viewport_modes[mode]
+            viewport_cfg = {
+                "base_font_size": vp.base_font_size,
+                "container_width": f"{vp.viewport['width']}px",
+                "spacing": vp.spacing,
+            }
+        
         html_parts: list[str] = []
-        css_parts: list[str] = [_build_base_css(self.fonts, self.colors)]
+        css_parts: list[str] = [_build_base_css(self.fonts, self.colors, mode, viewport_cfg)]
+        columns = style.get("columns", 2)
+        if mode == "mobile":
+            columns = 1  # Force single column for mobile
 
         for comp in components:
             # Normalize: LLM may send "Hero", "Grid", etc.
@@ -217,7 +253,7 @@ class LayoutGenerator:
             if comp_type == "hero":
                 guid = comp.get("entry_guid") or comp.get("guid")
                 if guid and guid in self._entries:
-                    html_parts.append(module.render(self._entry_to_dict(self._entries[guid])))
+                    html_parts.append(module.render(self._entry_to_dict(self._entries[guid]), mode=mode))
                     css_parts.append(module.css())
                 else:
                     logger.warning("Hero component: no entry found for guid=%s", guid)
@@ -230,9 +266,8 @@ class LayoutGenerator:
                     guids = [guids]
                 entries = [self._entries[g] for g in guids if g in self._entries]
                 if entries:
-                    columns = style.get("columns", 2)
                     entry_dicts = [self._entry_to_dict(e) for e in entries]
-                    html_parts.append(module.render(entry_dicts, columns=columns))
+                    html_parts.append(module.render(entry_dicts, columns=columns, mode=mode))
                     css_parts.append(module.css())
 
             elif comp_type == "sidebar":
@@ -244,14 +279,19 @@ class LayoutGenerator:
                 entries = [self._entries[g] for g in guids if g in self._entries]
                 if entries:
                     entry_dicts = [self._entry_to_dict(e) for e in entries]
-                    html_parts.append(module.render(entry_dicts))
+                    html_parts.append(module.render(entry_dicts, mode=mode))
                     css_parts.append(module.css())
 
         return "\n".join(html_parts), "\n".join(css_parts)
 
 
-def _build_base_css(fonts: dict[str, str], colors: dict[str, str] | None = None) -> str:
-    """Generate base CSS with configurable fonts and colors."""
+def _build_base_css(
+    fonts: dict[str, str],
+    colors: dict[str, str] | None = None,
+    mode: str = "desktop",
+    viewport_cfg: dict | None = None,
+) -> str:
+    """Generate base CSS with configurable fonts, colors, and viewport mode."""
     colors = colors or {
         "text": "#333",
         "text-muted": "#555",
@@ -259,6 +299,10 @@ def _build_base_css(fonts: dict[str, str], colors: dict[str, str] | None = None)
         "border-light": "#eee",
         "accent": "#0066cc",
     }
+    viewport_cfg = viewport_cfg or {}
+    base_font = viewport_cfg.get("base_font_size", "0.85rem")
+    container_width = viewport_cfg.get("container_width", "800px")
+    spacing = viewport_cfg.get("spacing", "1.5rem")
     google_import = f"@import url('{fonts['google_fonts']}');" if fonts.get("google_fonts") else ""
     return f"""
 {google_import}
@@ -272,45 +316,30 @@ def _build_base_css(fonts: dict[str, str], colors: dict[str, str] | None = None)
     --font-sans: {fonts["sans"]};
 }}
 body {{
-    max-width: 800px;
+    max-width: {container_width};
     margin: 0 auto;
-    padding: 1.5rem;
+    padding: {spacing};
     font-family: var(--font-serif);
-    font-size: 0.85rem;
+    font-size: {base_font};
     line-height: 1.5;
     color: var(--color-text);
 }}
 .topic-header {{
     text-align: center;
-    margin: 2rem 0 2.5rem;
-    padding-bottom: 1.5rem;
-    position: relative;
+    margin: 2.5rem 0 2rem;
+    padding: 1.5rem 0 1.5rem;
+    border-top: 3px solid var(--color-accent);
+    border-bottom: 1px solid var(--color-border-light);
 }}
-.topic-header::before {{
-    content: "";
-    display: block;
-    height: 3px;
-    background: var(--color-accent);
-    margin: 0 auto 1rem;
-    width: 60px;
-}}
-.topic-header::after {{
-    content: "";
-    display: block;
-    height: 1px;
-    background: var(--color-border-light);
-    margin: 1rem auto 0;
-    width: 100%;
-}}
-.topic-header h2 {{
-    font-size: 1.6rem;
-    font-family: var(--font-sans);
+.topic-header h1 {{
+    font-size: 2rem;
+    font-family: var(--font-serif);
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.08em;
     margin: 0;
     color: var(--color-text);
-    line-height: 1.2;
+    line-height: 1.1;
 }}
 .source-link {{
     font-size: 0.75rem;

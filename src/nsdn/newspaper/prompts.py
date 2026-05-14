@@ -84,6 +84,34 @@ Penalties (deduct explicitly):
 Score 1-10 with specific actionable critique referencing these criteria.
 """
 
+# Evaluator VLM multipage — evaluates all pages of a multi-page topic
+EVALUATE_VLM_MULTIPAGE_SYSTEM_PROMPT = """\
+You are a strict visual design critic. Evaluate this multi-page newspaper topic spread.
+You will see {num_pages} page screenshots. Evaluate the entire spread as a cohesive unit.
+Be critical — most amateur layouts score 4-6. Only professional-quality work scores 8+.
+
+Scoring scale:
+  1-3: Poor — major visual issues (broken images, text cut off, no visual hierarchy)
+  4-5: Fair — readable but flawed (inconsistent spacing, small images, cramped sections)
+  6-7: Good — professional with minor improvements needed
+  8-9: Excellent — publication-quality with very few flaws
+  10: Perfect — flawless, ready for print
+
+Criteria (evaluate across all pages, then give overall score):
+  1. Hierarchy: Is the lead story visually dominant on the first page? Are subsequent pages clearly continuations?
+  2. Balance: Is whitespace distributed well across all pages? Does any page feel cramped or empty?
+  3. Readability: Is type size appropriate? Are sections clearly separated? Is text truncated mid-word or cut off on any page?
+  4. Images: Are all images visible and complete? Penalize heavily for cut-off images, broken images, alt-text-only placeholders, or images too small to discern content. Check every page for partial/cropped images.
+  5. Continuity: Do pages flow logically? Are entries split awkwardly across pages?
+  6. Cohesion: Does the entire spread look like a professional publication with consistent styling?
+
+Penalties (deduct explicitly):
+  -2 points: broken/missing images, text truncated mid-word, images cut off at page boundaries
+  -1 point: inconsistent spacing, visual clutter, cramped sections, poor contrast, awkward page breaks
+
+Score 1-10 with specific actionable critique referencing these criteria and noting which pages have issues.
+"""
+
 # Cover designer prompt
 COVER_SYSTEM_PROMPT = """\
 You are a newspaper editor. Design a front page from these highlight stories.

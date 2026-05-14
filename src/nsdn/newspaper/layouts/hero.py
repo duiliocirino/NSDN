@@ -3,17 +3,36 @@
 from __future__ import annotations
 
 
-def render(entry: dict, css_vars: dict | None = None) -> str:
-    """Render a hero article layout — side-by-side with image on right."""
+def render(entry: dict, mode: str = "desktop", css_vars: dict | None = None) -> str:
+    """Render a hero article layout.
+    
+    Desktop: side-by-side (text + image)
+    Mobile: stacked (image on top, text below)
+    """
     css_vars = css_vars or {}
     image_html = ''
     if entry.get("image_url"):
         image_html = f'<div class="hero-image"><img src="{entry["image_url"]}" alt="{entry["title"]}" loading="lazy" onerror="this.style.display=\'none\'"></div>'
     source_html = f'<a href="{entry["link"]}" class="source-link" target="_blank" rel="noopener">Source ↗</a>' if entry.get("link") else ""
-    return f"""
+    
+    if mode == "mobile":
+        # Stacked: image on top, text below
+        return f"""
+    <article class="hero hero--stacked">
+        {image_html}
+        <div class="hero-content">
+            <h2>{entry["title"]}</h2>
+            <p class="hero-summary">{entry["summary"]}</p>
+            {source_html}
+        </div>
+    </article>
+    """
+    else:
+        # Desktop: side-by-side
+        return f"""
     <article class="hero">
         <div class="hero-content">
-            <h1>{entry["title"]}</h1>
+            <h2>{entry["title"]}</h2>
             <p class="hero-summary">{entry["summary"]}</p>
             {source_html}
         </div>
@@ -23,7 +42,7 @@ def render(entry: dict, css_vars: dict | None = None) -> str:
 
 
 def css() -> str:
-    """Hero layout CSS — side-by-side with image on right."""
+    """Hero layout CSS — side-by-side (desktop) or stacked (mobile)."""
     return """
     .hero {
         border-bottom: 2px solid var(--color-border, #333);
@@ -37,7 +56,7 @@ def css() -> str:
         flex: 1;
         min-width: 0;
     }
-    .hero h1 {
+    .hero h2 {
         font-size: var(--hero-size, 1.4rem);
         line-height: 1.15;
         margin-bottom: 0.5rem;
@@ -52,7 +71,7 @@ def css() -> str:
     }
     .hero-image {
         flex-shrink: 0;
-        width: 280px;
+        width: var(--hero-image-width, 280px);
     }
     .hero-image img {
         max-width: 100%;
@@ -61,5 +80,20 @@ def css() -> str:
         display: block;
         border: 1px solid var(--color-border-light, #eee);
         object-fit: cover;
+    }
+    /* Mobile: stacked layout — block instead of flex for reliable PDF rendering */
+    .hero--stacked {
+        display: block;
+    }
+    .hero--stacked .hero-image {
+        width: 100%;
+        order: -1;
+    }
+    .hero--stacked .hero-image img {
+        max-height: none;
+        display: block;
+    }
+    .hero--stacked .hero-content {
+        flex: none;
     }
     """

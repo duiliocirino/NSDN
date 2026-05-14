@@ -48,12 +48,16 @@ class ComponentStrategy(NewspaperStrategy):
             config.newspaper.layouts,
             fonts=resolve_fonts(config.newspaper.font_preset, config.newspaper.fonts or None),
             colors=config.newspaper.colors or None,
+            viewport_modes=config.newspaper.modes,
         )
-        self.renderer = Renderer({
-            "viewport": config.newspaper.viewport,
-            "screenshot": config.newspaper.screenshot,
-            "pdf": config.newspaper.pdf,
-        })
+        self.renderer = Renderer(
+            {
+                "viewport": config.newspaper.viewport,
+                "screenshot": config.newspaper.screenshot,
+                "pdf": config.newspaper.pdf,
+            },
+            viewport_modes=config.newspaper.modes,
+        )
         self.evaluator = Evaluator(
             design_llm,
             evaluate_llm,
@@ -87,16 +91,30 @@ class ComponentStrategy(NewspaperStrategy):
 
             logger.info("Clustered into %d topics: %s", len(entries_by_topic), list(entries_by_topic.keys()))
 
-            # Step 2: Design topic pages (iterative)
-            topic_pages: dict[str, DesignedPage] = {}
+            # Step 2: Design topic pages (iterative, desktop + mobile)
+            topic_pages: dict[str, tuple[DesignedPage, DesignedPage]] = {}
             for topic, topic_entries in entries_by_topic.items():
-                page = self._design_topic(topic_entries, topic)
-                topic_pages[topic] = page
+                desktop_page, mobile_page = self._design_topic(topic_entries, topic)
+                topic_pages[topic] = (desktop_page, mobile_page)
 
-            # Step 3: Design cover
+            # Step 3: Design cover (desktop + mobile)
             with self.emitter.timer("cover"):
                 cover_html, cover_css = self.cover_designer.design(entries_by_topic)
             self.emitter.save_text("cover.html", cover_html)
+
+            generate_mobile = self.config.newspaper.generate_mobile
+            self._mobile_cover_html = ""
+            self._mobile_cover_css = ""
+            if generate_mobile:
+                with self.emitter.timer("cover-mobile"):
+                    self._mobile_cover_html, self._mobile_cover_css = self.generator.generate_cover(
+                        self.cover_designer._get_selector().select(entries_by_topic),
+                        entries_by_topic,
+                        date.today().isoformat(),
+                        self._get_slot(),
+                        mode="mobile",
+                    )
+                self.emitter.save_text("cover-mobile.html", self._mobile_cover_html)
 
             # Step 4: Assemble edition
             output_dir = self._setup_output()
@@ -124,59 +142,125 @@ class ComponentStrategy(NewspaperStrategy):
         finally:
             self.emitter.close()
 
-    def _design_topic(self, entries: list[FeedEntry], topic: str) -> DesignedPage:
-        """Design a topic page with iterative feedback."""
+    def _design_topic(self, entries: list[FeedEntry], topic: str) -> tuple[DesignedPage, DesignedPage]:
+        """Design a topic page for desktop + mobile with iterative feedback.
+
+        Returns (desktop_page, mobile_page).
+        Layout spec is generated ONCE per iteration, then rendered for both modes.
+        """
         feedback = ""
-        best_page = DesignedPage("", "", 0.0, topic)
+        best_desktop = DesignedPage("", "", 0.0, topic)
+        best_mobile = DesignedPage("", "", 0.0, topic)
         max_iterations = self.config.newspaper.max_iterations
         threshold = self.config.newspaper.quality_threshold
+        eval_modes = self.config.newspaper.eval_modes
+        generate_mobile = self.config.newspaper.generate_mobile
         safe_topic = topic.lower().replace(" ", "-").replace("/", "-")
 
         for iteration in range(max_iterations):
             logger.info("Designing '%s' — iteration %d/%d", topic, iteration + 1, max_iterations)
 
-            # Generate
+            # Clear cache so LLM generates fresh spec with feedback
+            self.generator.clear_cache()
+
+            # Generate desktop (invokes LLM, caches spec)
             with self.emitter.timer("generate", topic=topic, iteration=iteration):
-                html, css, layout_spec = self.generator.generate(entries, topic, feedback)
+                desktop_html, desktop_css, layout_spec = self.generator.generate(entries, topic, feedback)
             self.emitter.save_text(f"{safe_topic}/iter{iteration}_spec.json", layout_spec)
-            self.emitter.save_text(f"{safe_topic}/iter{iteration}.html", html)
+            self.emitter.save_text(f"{safe_topic}/iter{iteration}.html", desktop_html)
 
             # Check if HTML is empty — skip eval, force retry
-            if not html.strip():
+            if not desktop_html.strip():
                 logger.warning("'%s' iter %d: empty HTML — retrying", topic, iteration)
                 feedback = "Generated empty HTML. Produce a valid layout with at least one hero component."
                 continue
 
-            # Render screenshot + evaluate
-            try:
-                screenshot = self.renderer.to_image(html, css, topic)
-                self.emitter.save_bytes(f"{safe_topic}/iter{iteration}.png", screenshot)
-            except Exception as exc:
-                logger.warning("Screenshot failed for '%s': %s — text-only eval", topic, exc)
-                score, critique = self.evaluator._evaluate_text(layout_spec)
-                score = score * self.evaluator.text_weight / (
-                    self.evaluator.text_weight + self.evaluator.vlm_weight
+            # Generate mobile from cached spec (no LLM call)
+            if generate_mobile:
+                mobile_html, mobile_css, _ = self.generator.generate_mode(
+                    entries, topic, feedback, mode="mobile"
                 )
+                self.emitter.save_text(f"{safe_topic}/iter{iteration}-mobile.html", mobile_html)
             else:
-                score, critique = self.evaluator.evaluate(screenshot, layout_spec, topic)
+                mobile_html = mobile_css = ""
 
-            self.emitter.log_step(
-                "score", topic=topic, iteration=iteration, score=score,
-                html_length=len(html), converged=score >= threshold,
+            # Evaluate desktop
+            desktop_score, desktop_critique = self._evaluate_mode(
+                desktop_html, desktop_css, layout_spec, topic, "desktop"
             )
 
-            if score > best_page.score:
-                best_page = DesignedPage(html, css, score, topic)
+            # Evaluate mobile
+            if generate_mobile and eval_modes == "full":
+                mobile_score, mobile_critique = self._evaluate_mode(
+                    mobile_html, mobile_css, layout_spec, topic, "mobile"
+                )
+            elif generate_mobile:
+                # Fast path: reuse desktop score
+                mobile_score, mobile_critique = desktop_score, desktop_critique
+            else:
+                mobile_score, mobile_critique = 0.0, ""
 
-            if score >= threshold:
-                logger.info("'%s' converged at iteration %d (score: %.1f)", topic, iteration + 1, score)
-                return best_page
+            self.emitter.log_step(
+                "score", topic=topic, iteration=iteration,
+                desktop_score=desktop_score, mobile_score=mobile_score,
+                converged=(desktop_score >= threshold and mobile_score >= threshold),
+            )
 
-            feedback = critique
-            logger.info("'%s' score: %.1f/%d — continuing", topic, score, threshold)
+            if desktop_score > best_desktop.score:
+                best_desktop = DesignedPage(desktop_html, desktop_css, desktop_score, topic)
 
-        logger.warning("'%s' did not converge after %d iterations (best: %.1f)", topic, max_iterations, best_page.score)
-        return best_page
+            if generate_mobile and mobile_score > best_mobile.score:
+                best_mobile = DesignedPage(mobile_html, mobile_css, mobile_score, topic)
+
+            # Convergence check
+            if desktop_score >= threshold and (not generate_mobile or mobile_score >= threshold):
+                logger.info(
+                    "'%s' converged at iteration %d (desktop: %.1f, mobile: %.1f)",
+                    topic, iteration + 1, desktop_score, mobile_score,
+                )
+                return best_desktop, best_mobile
+
+            # Combined feedback for next iteration
+            feedback = "\n\n".join(filter(None, [desktop_critique, mobile_critique]))
+            logger.info(
+                "'%s' desktop: %.1f mobile: %.1f / %d — continuing",
+                topic, desktop_score, mobile_score, threshold,
+            )
+
+        logger.warning(
+            "'%s' did not converge after %d iterations (desktop: %.1f, mobile: %.1f)",
+            topic, max_iterations, best_desktop.score, best_mobile.score,
+        )
+        return best_desktop, best_mobile
+
+    def _evaluate_mode(
+        self,
+        html: str,
+        css: str,
+        layout_spec: str,
+        topic: str,
+        mode: str,
+    ) -> tuple[float, str]:
+        """Render PDF, convert pages to images, evaluate all pages."""
+        safe_topic = topic.lower().replace(" ", "-").replace("/", "-")
+        try:
+            pdf_bytes = self.renderer.to_pdf(html, css, topic, mode=mode)
+            page_images = self.renderer.pdf_to_images(pdf_bytes)
+            for i, img in enumerate(page_images):
+                self.emitter.save_bytes(f"{safe_topic}/{mode}-page{i}.png", img)
+        except Exception as exc:
+            logger.warning("PDF render failed for '%s' (%s): %s — text-only eval", topic, mode, exc)
+            score, critique = self.evaluator._evaluate_text(layout_spec)
+            score = score * self.evaluator.text_weight / (
+                self.evaluator.text_weight + self.evaluator.vlm_weight
+            )
+            return score, critique
+
+        if len(page_images) == 1:
+            score, critique = self.evaluator.evaluate(page_images[0], layout_spec, topic)
+        else:
+            score, critique = self.evaluator.evaluate_multipage(page_images, layout_spec, topic)
+        return score, critique
 
     def _cluster(self, entries: list[FeedEntry]) -> dict[str, list[FeedEntry]]:
         """Cluster entries using the configured strategy."""
@@ -198,23 +282,26 @@ class ComponentStrategy(NewspaperStrategy):
         output_dir: Path,
         cover_html: str,
         cover_css: str,
-        topic_pages: dict[str, DesignedPage],
+        topic_pages: dict[str, tuple[DesignedPage, DesignedPage]],
     ) -> list[str]:
-        """Assemble edition files.
+        """Assemble edition files for desktop + mobile.
 
         Output structure:
             output/journal/{edition_slug}/
                 cover.html
-                edition.pdf
+                edition.pdf            (desktop combined)
+                edition-mobile.pdf    (mobile combined)
                 topics/
-                    {topic}.html
-                    {topic}.pdf
+                    {topic}.html      (desktop)
+                    {topic}.pdf       (desktop)
+                    {topic}-mobile.html
+                    {topic}-mobile.pdf
         """
         edition_date = date.today().isoformat()
         slot = self._get_slot()
         slug = f"{edition_date}-{slot}"
+        generate_mobile = self.config.newspaper.generate_mobile
 
-        # Edition directory
         edition_dir = output_dir / slug
         topics_dir = edition_dir / "topics"
         topics_dir.mkdir(parents=True, exist_ok=True)
@@ -225,30 +312,66 @@ class ComponentStrategy(NewspaperStrategy):
         self._write_page(cover_html_path, cover_html, cover_css)
         files.append(str(cover_html_path))
 
-        # Topic pages
-        for topic, page in topic_pages.items():
+        # Topic pages — desktop + mobile
+        for topic, (desktop_page, mobile_page) in topic_pages.items():
             safe_topic = topic.lower().replace(" ", "-").replace("/", "-")
+
+            # Desktop
             topic_html_path = topics_dir / f"{safe_topic}.html"
-            self._write_page(topic_html_path, page.html, page.css, topic)
+            self._write_page(topic_html_path, desktop_page.html, desktop_page.css, topic)
             files.append(str(topic_html_path))
 
             try:
                 topic_pdf_path = topics_dir / f"{safe_topic}.pdf"
-                pdf_bytes = self.renderer.to_pdf(page.html, page.css, topic)
+                pdf_bytes = self.renderer.to_pdf(desktop_page.html, desktop_page.css, topic)
                 topic_pdf_path.write_bytes(pdf_bytes)
                 files.append(str(topic_pdf_path))
             except Exception as exc:
-                logger.warning("PDF failed for '%s': %s", topic, exc)
+                logger.warning("PDF failed for '%s' (desktop): %s", topic, exc)
 
-        # Combined edition PDF
+            # Mobile
+            if generate_mobile and mobile_page.html:
+                mobile_html_path = topics_dir / f"{safe_topic}-mobile.html"
+                self._write_page(mobile_html_path, mobile_page.html, mobile_page.css, topic)
+                files.append(str(mobile_html_path))
+
+                try:
+                    mobile_pdf_path = topics_dir / f"{safe_topic}-mobile.pdf"
+                    mobile_pdf_bytes = self.renderer.to_pdf(mobile_page.html, mobile_page.css, topic, mode="mobile")
+                    mobile_pdf_path.write_bytes(mobile_pdf_bytes)
+                    files.append(str(mobile_pdf_path))
+                except Exception as exc:
+                    logger.warning("PDF failed for '%s' (mobile): %s", topic, exc)
+
+        # Combined edition PDFs
         try:
-            all_html, all_css = self._combine_pages(cover_html, cover_css, topic_pages)
+            desktop_pages = {t: dp for t, (dp, _) in topic_pages.items()}
+            all_html, all_css = self._combine_pages(cover_html, cover_css, desktop_pages)
             edition_pdf_path = edition_dir / "edition.pdf"
-            edition_pdf_bytes = self.renderer.to_pdf(all_html, all_css)
+            edition_pdf_bytes = self.renderer.to_pdf(all_html, all_css, mode="desktop")
             edition_pdf_path.write_bytes(edition_pdf_bytes)
             files.append(str(edition_pdf_path))
         except Exception as exc:
-            logger.warning("Edition PDF failed: %s", exc)
+            logger.warning("Edition PDF (desktop) failed: %s", exc)
+
+        if generate_mobile:
+            try:
+                mobile_pages = {t: mp for t, (_, mp) in topic_pages.items() if mp.html}
+                if mobile_pages:
+                    # Use mobile cover if available, else generate one
+                    if hasattr(self, "_mobile_cover_html") and self._mobile_cover_html:
+                        m_cover_html = self._mobile_cover_html
+                        m_cover_css = self._mobile_cover_css
+                    else:
+                        m_cover_html = cover_html
+                        m_cover_css = cover_css
+                    mobile_html, mobile_css = self._combine_pages(m_cover_html, m_cover_css, mobile_pages)
+                    mobile_edition_pdf = edition_dir / "edition-mobile.pdf"
+                    mobile_pdf_bytes = self.renderer.to_pdf(mobile_html, mobile_css, mode="mobile")
+                    mobile_edition_pdf.write_bytes(mobile_pdf_bytes)
+                    files.append(str(mobile_edition_pdf))
+            except Exception as exc:
+                logger.warning("Edition PDF (mobile) failed: %s", exc)
 
         return files
 
@@ -257,7 +380,7 @@ class ComponentStrategy(NewspaperStrategy):
         """Write a complete HTML page."""
         topic_header = ""
         if topic:
-            topic_header = f'<header class="topic-header"><h2>{topic}</h2></header>'
+            topic_header = f'<header class="topic-header"><h1>{topic}</h1></header>'
         combined = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -284,7 +407,7 @@ class ComponentStrategy(NewspaperStrategy):
 
         for topic, page in topic_pages.items():
             html_parts.append('<div style="page-break-before: always"></div>')
-            html_parts.append(f'<header class="topic-header"><h2>{topic}</h2></header>')
+            html_parts.append(f'<header class="topic-header"><h1>{topic}</h1></header>')
             html_parts.append(page.html)
             css_set.add(page.css)
 

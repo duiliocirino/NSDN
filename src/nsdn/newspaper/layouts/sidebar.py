@@ -3,14 +3,19 @@
 from __future__ import annotations
 
 
-def render(entries: list[dict], css_vars: dict | None = None) -> str:
-    """Render a sidebar with related entries."""
+def render(entries: list[dict], mode: str = "desktop", css_vars: dict | None = None) -> str:
+    """Render a sidebar with related entries.
+    
+    Desktop: left border accent
+    Mobile: top border accent
+    """
     css_vars = css_vars or {}
     items = ""
     for entry in entries:
         source_html = f'<a href="{entry["link"]}" class="source-link" target="_blank" rel="noopener">Source ↗</a>' if entry.get("link") else ""
+        cls = "sidebar-item sidebar-item--top" if mode == "mobile" else "sidebar-item"
         items += f"""
-        <div class="sidebar-item">
+        <div class="{cls}">
             <h4>{entry["title"]}</h4>
             {source_html}
         </div>
@@ -19,7 +24,7 @@ def render(entries: list[dict], css_vars: dict | None = None) -> str:
 
 
 def css() -> str:
-    """Sidebar layout CSS — matches grid-item styling for visual consistency."""
+    """Sidebar layout CSS — left border (desktop) or top border (mobile)."""
     return """
     .sidebar {
         margin-bottom: 0.5rem;
@@ -33,6 +38,13 @@ def css() -> str:
     .sidebar-item:last-child {
         margin-bottom: 0;
         padding-bottom: 0;
+    }
+    /* Mobile: top border instead of left */
+    .sidebar-item--top {
+        border-left: none;
+        border-top: 2px solid var(--color-accent, #0066cc);
+        padding-left: 0;
+        padding-top: 0.65rem;
     }
     .sidebar-item h4 {
         font-size: 0.95rem;

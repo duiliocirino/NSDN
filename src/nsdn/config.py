@@ -92,6 +92,19 @@ class WeaviateConfig(BaseModel):
     collection_name: str = "NSDNEntries"
 
 
+class ViewportMode(BaseModel):
+    """Viewport and layout settings for a rendering mode."""
+    label: str = "desktop"
+    viewport: dict[str, int] = Field(default_factory=lambda: {"width": 794, "height": 1123})
+    grid_columns: int = 2
+    base_font_size: str = "0.85rem"
+    hero_font_size: str = "1.4rem"
+    hero_summary_size: str = "0.85rem"
+    hero_image_width: str = "280px"
+    thumbnail_width: str = "120px"
+    spacing: str = "1rem"
+
+
 class NewspaperConfig(BaseModel):
     """Newspaper agent configuration (used when synthesize.mode = 'design')."""
     enabled: bool = True
@@ -102,8 +115,34 @@ class NewspaperConfig(BaseModel):
     screenshot: dict[str, int] = Field(default_factory=lambda: {"dpi": 300})
     pdf: dict[str, str] = Field(default_factory=lambda: {"format": "A4", "margin": "20mm"})
     evaluation: dict[str, float] = Field(default_factory=lambda: {"text_weight": 0.3, "vlm_weight": 0.7})
+    eval_modes: str = "full"  # "full" (both modes) | "fast" (desktop only)
     cover: dict[str, str] = Field(default_factory=lambda: {"style": "minimal"})
     layouts: list[str] = Field(default_factory=lambda: ["hero", "grid", "sidebar"])
+    generate_mobile: bool = True
+    modes: dict[str, ViewportMode] = Field(default_factory=lambda: {
+        "desktop": ViewportMode(
+            label="desktop",
+            viewport={"width": 794, "height": 1123},
+            grid_columns=2,
+            base_font_size="0.85rem",
+            hero_font_size="1.4rem",
+            hero_summary_size="0.85rem",
+            hero_image_width="280px",
+            thumbnail_width="120px",
+            spacing="1rem",
+        ),
+        "mobile": ViewportMode(
+            label="mobile",
+            viewport={"width": 375, "height": 812},
+            grid_columns=1,
+            base_font_size="1rem",
+            hero_font_size="1.3rem",
+            hero_summary_size="0.95rem",
+            hero_image_width="100%",
+            thumbnail_width="100%",
+            spacing="1.5rem",
+        ),
+    })
     font_preset: str = "classic"  # classic, editorial, modern, newspaper
     fonts: dict[str, str] = Field(
         default_factory=lambda: {

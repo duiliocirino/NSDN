@@ -3,15 +3,22 @@
 from __future__ import annotations
 
 
-def render(entries: list[dict], columns: int = 2, css_vars: dict | None = None) -> str:
-    """Render a grid of articles — newspaper-style floated thumbnails."""
+def render(entries: list[dict], columns: int = 2, mode: str = "desktop", css_vars: dict | None = None) -> str:
+    """Render a grid of articles — newspaper-style floated thumbnails.
+    
+    Desktop: floated thumbnails, multi-column
+    Mobile: stacked thumbnails, single column
+    """
     css_vars = css_vars or {}
     items = ""
     for entry in entries:
         source_html = f'<a href="{entry["link"]}" class="source-link" target="_blank" rel="noopener">Source ↗</a>' if entry.get("link") else ""
         image_html = ''
         if entry.get("image_url"):
-            image_html = f'<img class="grid-thumb" src="{entry["image_url"]}" alt="{entry["title"]}" loading="lazy" onerror="this.style.display=\'none\'">'
+            if mode == "mobile":
+                image_html = f'<img class="grid-thumb grid-thumb--stacked" src="{entry["image_url"]}" alt="{entry["title"]}" loading="lazy" onerror="this.style.display=\'none\'">'
+            else:
+                image_html = f'<img class="grid-thumb" src="{entry["image_url"]}" alt="{entry["title"]}" loading="lazy" onerror="this.style.display=\'none\'">'
         # Truncate to ~180 chars but don't split words
         summary = entry.get("summary", "")
         if len(summary) > 180:
@@ -28,7 +35,7 @@ def render(entries: list[dict], columns: int = 2, css_vars: dict | None = None) 
 
 
 def css() -> str:
-    """Grid layout CSS — newspaper-style floated thumbnails."""
+    """Grid layout CSS — newspaper-style floated thumbnails (desktop) or stacked (mobile)."""
     return """
     .grid {
         display: grid;
@@ -51,12 +58,19 @@ def css() -> str:
     }
     .grid-thumb {
         float: left;
-        width: 120px;
+        width: var(--thumbnail-width, 120px);
         height: auto;
         margin: 0 0.6rem 0.3rem 0;
         border: 1px solid var(--color-border-light, #eee);
         object-fit: contain;
         background: #f5f5f5;
+    }
+    /* Mobile: stacked thumbnails */
+    .grid-thumb--stacked {
+        float: none;
+        display: block;
+        width: 100%;
+        margin: 0 0 0.5rem 0;
     }
     .grid-item p {
         font-size: 0.78rem;
