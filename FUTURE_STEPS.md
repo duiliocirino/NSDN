@@ -8,82 +8,57 @@
 - [x] **PDF Margin Fix** — `@page { margin: 0 }` CSS instead of ignored `presentation` dict.
 - [x] **Clustering Bug Fix** — Empty topic filtering with "General" fallback in `llm_cluster.py`.
 - [x] **VLM Prompt Fix** — `EVALUATE_VLM_SYSTEM_PROMPT` now used (was hardcoded prompt).
-
-### **High Priority (Next Actions)**
-1. **Register 'template' Strategy**
-   - Location: `src/nsdn/newspaper/__init__.py`
-   - Action: Add `register_newspaper("template", NewspaperTemplateStrategy)`
-   - Rationale: Unify strategy registry for template-based designs.
-
-2. **Unify Template Strategy**
-   - Location: `src/nsdn/newspaper/template.py`
-   - Action: Implement iterative feedback in `_design_topic`.
-   - Rationale: Align `NewspaperTemplateStrategy` with `ComponentStrategy` for consistency.
-
-3. **Enhance Evaluator Criticality**
-   - Location: `src/nsdn/newspaper/evaluator.py`
-   - Action: Modify `_parse_score` to enforce strict score extraction (only first explicit score, discard fallbacks).
-   - Rationale: Prevent unrealistic scores (e.g., 9.3, 9.6) from being accepted.
-
-4. **Hide Broken Images Gracefully**
-   - Location: `src/nsdn/newspaper/layouts/grid.py`, `src/nsdn/newspaper/layouts/hero.py`
-   - Action: Add `onerror="this.style.display='none'"` to image tags.
-   - Rationale: Prevent broken image placeholders from showing alt text (titles) in image spaces.
+- [x] **Hide Broken Images** — `onerror="this.style.display='none'"` in hero.py + grid.py.
+- [x] **Evaluator Criticality** — Strict scoring scale (1-10) with explicit penalties and VLM prompt alignment.
+- [x] **Mobile/Desktop Mode** — Dual-mode rendering (CSS Variant approach). `ViewportMode` config, mode-aware layouts (stacked hero, 1-col grid, top-border sidebar), separate mobile cover/edition PDFs. Mobile PDFs use 375px viewport.
+- [x] **Multi-Page VLM Evaluation** — PDF→images via `pypdfium2`, all pages passed to VLM for holistic assessment. Detects cut images, awkward page breaks, missing content on pages 2-3.
+- [x] **Mobile Cover Generation** — `generate_cover(mode)` renders mode-aware hero/grid for both desktop and mobile covers.
+- [x] **Hero Layout Fix** — Mobile hero uses `display: block` instead of flex to prevent WeasyPrint height-calculation bugs and content overlap.
 
 ### **Medium Priority (Next Features)**
-4. **Support Multiple Drafts per Topic**
+1. **Support Multiple Drafts per Topic**
    - Location: `src/nsdn/newspaper/component.py`
    - Action: Allow LLM to generate multiple drafts per topic and select the best one.
    - Rationale: Improve layout quality through iteration and selection.
 
-5. **Accept Multiple Images per Entry**
+2. **Accept Multiple Images per Entry**
    - Location: `src/nsdn/newspaper/generator.py`
    - Action: Modify image handling to include multiple images per entry if available.
    - Rationale: Enhance topic pages with richer visual content.
 
-6. **Add Topic with At Least 1 Entry Validation in Clustering**
-   - Location: `src/nsdn/newspaper/selectors.py`
-   - Action: Add validation to ensure each topic has at least 1 entry.
-   - Rationale: Prevent empty topics and ensure meaningful standalone pages.
-
-7. **Add Text-to-Image Generation for Topics with No Images**
+3. **Add Text-to-Image Generation for Topics with No Images**
    - Location: `src/nsdn/newspaper/generator.py`
    - Action: Use a secondary model to generate images based on the designer's prompt.
    - Rationale: Enhance visual appeal for topics lacking images.
 
-8. **Introduce Mobile/Desktop Mode**
-   - Location: `src/nsdn/newspaper/generator.py`, `src/nsdn/config.py`
-   - Action: Add responsive CSS media queries or a config toggle to increase font sizes for mobile viewports.
-   - Rationale: Improve readability on smaller screens where default print/PDF sizes are too small.
-
 ### **Lower Priority (Future Enhancements)**
-7. **Implement Registry Validation for Highlight Selectors**
+1. **Implement Registry Validation for Highlight Selectors**
    - Location: `src/nsdn/newspaper/selectors.py`
    - Action: Add `issubclass(cls, HighlightSelector)` check in `register_selector`.
    - Rationale: Ensure only valid selectors are registered.
 
-8. **Add Additional Highlight Selectors (e.g., editorial variety)**
+2. **Add Additional Highlight Selectors (e.g., editorial variety)**
    - Location: `src/nsdn/newspaper/selectors.py`
    - Action: Extend `HighlightSelector` with new strategies.
    - Rationale: Increase flexibility in cover design.
 
-9. **Implement PullQuote and StatBox Components**
+3. **Implement PullQuote and StatBox Components**
    - Location: `src/nsdn/newspaper/layouts/pullquote.py`, `src/nsdn/newspaper/layouts/statbox.py`
    - Rationale: Add advanced layout features for professionalism.
 
-10. **Add RSS/Atom and HackerNews Sources**
+4. **Add RSS/Atom and HackerNews Sources**
    - Location: `src/nsdn/sources/reddit.py`, `src/nsdn/sources/rss.py`
    - Rationale: Support additional content sources.
 
-11. **Integrate DebugEmitter for Structured Logging in All Strategies**
-    - Location: `src/nsdn/newspaper/component.py`, `src/nsdn/newspaper/template.py`
-    - Action: Ensure `DebugEmitter` is initialized and used consistently in all strategies.
-    - Rationale: Improve debugging and artifact storage for all strategies.
+5. **Integrate DebugEmitter for Structured Logging in All Strategies**
+   - Location: `src/nsdn/newspaper/component.py`, `src/nsdn/newspaper/template.py`
+   - Action: Ensure `DebugEmitter` is initialized and used consistently in all strategies.
+   - Rationale: Improve debugging and artifact storage for all strategies.
 
-12. **Implement Scheduled Runs and Auto-Publishing**
-    - Location: `src/nsdn/cli.py`
-    - Action: Add cron-like or scheduler-based auto-publishing functionality.
-    - Rationale: Enable automated workflows for regular editions.
+6. **Implement Scheduled Runs and Auto-Publishing**
+   - Location: `src/nsdn/cli.py`
+   - Action: Add cron-like or scheduler-based auto-publishing functionality.
+   - Rationale: Enable automated workflows for regular editions.
 
 ---
 
