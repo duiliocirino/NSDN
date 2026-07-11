@@ -34,6 +34,8 @@ def css() -> str:
         padding-left: 0.65rem;
         margin-bottom: 0.65rem;
         padding-bottom: 0.65rem;
+        break-inside: avoid;
+        page-break-inside: avoid;
     }
     .sidebar-item:last-child {
         margin-bottom: 0;

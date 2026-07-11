@@ -84,14 +84,18 @@ def css() -> str:
     /* Mobile: stacked layout — block instead of flex for reliable PDF rendering */
     .hero--stacked {
         display: block;
+        break-inside: avoid;
+        page-break-inside: avoid;
     }
     .hero--stacked .hero-image {
         width: 100%;
         order: -1;
     }
     .hero--stacked .hero-image img {
-        max-height: none;
+        max-height: 360px;
+        height: auto;
         display: block;
+        object-fit: contain;
     }
     .hero--stacked .hero-content {
         flex: none;

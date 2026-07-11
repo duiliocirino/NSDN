@@ -49,6 +49,8 @@ def css() -> str:
         border-left: 2px solid var(--color-accent, #0066cc);
         padding-left: 0.65rem;
         overflow: hidden;
+        break-inside: avoid;
+        page-break-inside: avoid;
     }
     .grid-item h3 {
         font-size: 0.9rem;
@@ -65,12 +67,14 @@ def css() -> str:
         object-fit: contain;
         background: #f5f5f5;
     }
-    /* Mobile: stacked thumbnails */
+    /* Mobile: stacked thumbnails — constrained height to prevent page cuts */
     .grid-thumb--stacked {
         float: none;
         display: block;
         width: 100%;
+        max-height: 360px;
         margin: 0 0 0.5rem 0;
+        object-fit: contain;
     }
     .grid-item p {
         font-size: 0.78rem;
