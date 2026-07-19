@@ -2,23 +2,19 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from nsdn.summarizers.base import SummarizerStrategy
 
-from nsdn.sources.base import FeedEntry
-
-if TYPE_CHECKING:
-    from nsdn.config import AppConfig
-
-SUMMARIZER_REGISTRY: dict[str, type] = {}
+SUMMARIZER_REGISTRY: dict[str, type[SummarizerStrategy]] = {}
 
 
-def register_summarizer(strategy_type: str, strategy_class: type) -> None:
+def register_summarizer(strategy_type: str, strategy_class: type[SummarizerStrategy]) -> None:
     SUMMARIZER_REGISTRY[strategy_type] = strategy_class
 
 
-def get_summarizer(strategy_type: str):
+def get_summarizer(strategy_type: str) -> type[SummarizerStrategy]:
     if strategy_type not in SUMMARIZER_REGISTRY:
-        raise ValueError(f"Unknown summarizer strategy: {strategy_type}. Available: {list(SUMMARIZER_REGISTRY.keys())}")
+        available = ", ".join(SUMMARIZER_REGISTRY.keys()) or "(none)"
+        raise ValueError(f"Unknown summarizer strategy: {strategy_type}. Available: {available}")
     return SUMMARIZER_REGISTRY[strategy_type]
 
 

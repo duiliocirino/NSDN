@@ -2,26 +2,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from nsdn.config import AppConfig
 from nsdn.db import Database
 from nsdn.llm import LLMProvider
-from nsdn.sources.base import FeedEntry
+from nsdn.newspaper.base import NewspaperStrategy
 
-if TYPE_CHECKING:
-    pass
-
-NEWSPAPER_REGISTRY: dict[str, type] = {}
+NEWSPAPER_REGISTRY: dict[str, type[NewspaperStrategy]] = {}
 
 
-def register_newspaper(name: str, cls: type) -> None:
+def register_newspaper(name: str, cls: type[NewspaperStrategy]) -> None:
     NEWSPAPER_REGISTRY[name] = cls
 
 
-def get_newspaper(name: str) -> type:
+def get_newspaper(name: str) -> type[NewspaperStrategy]:
     if name not in NEWSPAPER_REGISTRY:
-        raise ValueError(f"Unknown newspaper strategy: {name}. Available: {list(NEWSPAPER_REGISTRY.keys())}")
+        available = ", ".join(NEWSPAPER_REGISTRY.keys()) or "(none)"
+        raise ValueError(f"Unknown newspaper strategy: {name}. Available: {available}")
     return NEWSPAPER_REGISTRY[name]
 
 

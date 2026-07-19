@@ -14,6 +14,7 @@ from nsdn.designers import get_designer
 from nsdn.llm import LLMProvider
 from nsdn.prompts import EDITOR_SYSTEM_PROMPT, build_editor_prompt
 from nsdn.sources.base import FeedEntry
+from nsdn.utils import get_slot
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ def _write_llm(
 
     md_content = "\n\n".join(sections)
     edition_date = date.today().isoformat()
-    slot = _get_slot()
+    slot = get_slot()
 
     # Write Markdown
     output_dir = Path(config.output.directory)
@@ -132,11 +133,11 @@ def _write_raw(
 ) -> dict[str, Any]:
     """Write journal using raw passthrough (no LLM)."""
     designer_class = get_designer(config.output.designer)
-    designer = designer_class(config.output.model_dump() if hasattr(config.output, 'model_dump') else {})
+    designer = designer_class(config.output.model_dump())
 
-    md_content = designer.render_edition(entries_by_topic, date.today().isoformat(), _get_slot())
+    md_content = designer.render_edition(entries_by_topic, date.today().isoformat(), get_slot())
     edition_date = date.today().isoformat()
-    slot = _get_slot()
+    slot = get_slot()
 
     output_dir = Path(config.output.directory)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -169,8 +170,7 @@ def _render(
     html_body = mistune.html(md_content)
 
     designer_class = get_designer(config.output.designer)
-    designer_cfg = config.output.model_dump() if hasattr(config.output, "model_dump") else {}
-    designer = designer_class(designer_cfg)
+    designer = designer_class(config.output.model_dump())
     ctx = designer.get_context(html_body, edition_date, slot)
 
     env = Environment(loader=FileSystemLoader(str(Path("templates"))))
@@ -197,14 +197,4 @@ def _render(
     return html_file
 
 
-def _get_slot() -> str:
-    """Get time slot from current hour."""
-    from datetime import datetime
 
-    hour = datetime.now().hour
-    if hour < 12:
-        return "morning"
-    elif hour < 17:
-        return "afternoon"
-    else:
-        return "evening"

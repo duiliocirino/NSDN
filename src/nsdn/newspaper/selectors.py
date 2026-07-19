@@ -3,23 +3,20 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
 
 from nsdn.sources.base import FeedEntry
 
-if TYPE_CHECKING:
-    pass
-
-SELECTOR_REGISTRY: dict[str, type] = {}
+SELECTOR_REGISTRY: dict[str, type[HighlightSelector]] = {}
 
 
-def register_selector(name: str, cls: type) -> None:
+def register_selector(name: str, cls: type[HighlightSelector]) -> None:
     SELECTOR_REGISTRY[name] = cls
 
 
-def get_selector(name: str) -> type:
+def get_selector(name: str) -> type[HighlightSelector]:
     if name not in SELECTOR_REGISTRY:
-        raise ValueError(f"Unknown highlight selector: {name}. Available: {list(SELECTOR_REGISTRY.keys())}")
+        available = ", ".join(SELECTOR_REGISTRY.keys()) or "(none)"
+        raise ValueError(f"Unknown highlight selector: {name}. Available: {available}")
     return SELECTOR_REGISTRY[name]
 
 

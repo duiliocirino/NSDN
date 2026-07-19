@@ -32,8 +32,7 @@ def render_markdown(config: AppConfig, md_path: Path) -> Path:
         edition_date, slot = stem, "default"
 
     designer_class = get_designer(config.output.designer)
-    designer_cfg = config.output.model_dump() if hasattr(config.output, "model_dump") else {}
-    designer = designer_class(designer_cfg)
+    designer = designer_class(config.output.model_dump())
     ctx = designer.get_context(html_body, edition_date, slot)
 
     env = Environment(loader=FileSystemLoader(str(Path("templates"))))

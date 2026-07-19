@@ -2,24 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
+from nsdn.clusters.base import ClusterStrategy
 from nsdn.llm import LLMProvider
 from nsdn.sources.base import FeedEntry
 
-if TYPE_CHECKING:
-    from nsdn.config import AppConfig
-
-CLUSTER_REGISTRY: dict[str, type] = {}
+CLUSTER_REGISTRY: dict[str, type[ClusterStrategy]] = {}
 
 
-def register_cluster(strategy_type: str, strategy_class: type) -> None:
+def register_cluster(strategy_type: str, strategy_class: type[ClusterStrategy]) -> None:
     CLUSTER_REGISTRY[strategy_type] = strategy_class
 
 
-def get_cluster(strategy_type: str):
+def get_cluster(strategy_type: str) -> type[ClusterStrategy]:
     if strategy_type not in CLUSTER_REGISTRY:
-        raise ValueError(f"Unknown cluster strategy: {strategy_type}. Available: {list(CLUSTER_REGISTRY.keys())}")
+        available = ", ".join(CLUSTER_REGISTRY.keys()) or "(none)"
+        raise ValueError(f"Unknown cluster strategy: {strategy_type}. Available: {available}")
     return CLUSTER_REGISTRY[strategy_type]
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +17,7 @@ from nsdn.newspaper.evaluator import Evaluator
 from nsdn.newspaper.generator import LayoutGenerator
 from nsdn.newspaper.renderer import Renderer
 from nsdn.sources.base import FeedEntry
+from nsdn.utils import get_slot
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +77,7 @@ class ComponentStrategy(NewspaperStrategy):
         logger.info("Designing %d kept entries", len(entries))
 
         # Debug emitter
-        edition_slug = f"design-{date.today().isoformat()}-{self._get_slot()}"
+        edition_slug = f"design-{date.today().isoformat()}-{get_slot()}"
         output_dir = Path(self.config.output.directory).parent
         self.emitter = DebugEmitter(self.config.debug, output_dir, edition_slug)
 
@@ -111,7 +112,7 @@ class ComponentStrategy(NewspaperStrategy):
                         self.cover_designer._get_selector().select(entries_by_topic),
                         entries_by_topic,
                         date.today().isoformat(),
-                        self._get_slot(),
+                        get_slot(),
                         mode="mobile",
                     )
                 self.emitter.save_text("cover-mobile.html", self._mobile_cover_html)
@@ -123,7 +124,7 @@ class ComponentStrategy(NewspaperStrategy):
             # Step 5: Mark entries as processed + record edition
             guids = [e.guid for e in entries]
             edition_date = date.today().isoformat()
-            slot = self._get_slot()
+            slot = get_slot()
             db.mark_processed(guids, edition_date, slot)
             # Record in editions table so the UI can find it
             # Note: edition dir is {date}-{slot}, not design-{date}-{slot}
@@ -299,7 +300,7 @@ class ComponentStrategy(NewspaperStrategy):
                     {topic}-mobile.pdf
         """
         edition_date = date.today().isoformat()
-        slot = self._get_slot()
+        slot = get_slot()
         slug = f"{edition_date}-{slot}"
         generate_mobile = self.config.newspaper.generate_mobile
 
@@ -413,17 +414,6 @@ class ComponentStrategy(NewspaperStrategy):
             css_set.add(page.css)
 
         return "\n".join(html_parts), "\n".join(css_set)
-
-    @staticmethod
-    def _get_slot() -> str:
-        """Get time slot from current hour."""
-        hour = datetime.now().hour
-        if hour < 12:
-            return "morning"
-        elif hour < 17:
-            return "afternoon"
-        else:
-            return "evening"
 
 
 # Auto-register

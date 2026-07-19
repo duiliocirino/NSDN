@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from nsdn.config import AppConfig
 from nsdn.db import Database
 from nsdn.llm import LLMProvider
 
@@ -11,7 +12,7 @@ from nsdn.llm import LLMProvider
 class SummarizerStrategy(ABC):
     """Abstract base for summarization strategies."""
 
-    def __init__(self, config):
+    def __init__(self, config: AppConfig):
         self.config = config
 
     @abstractmethod
