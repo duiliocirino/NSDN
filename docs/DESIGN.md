@@ -33,7 +33,7 @@ Sources (EntrySource)  ──►  SQLite (State Mgr)  ──►  Weaviate (Seman
                                 - "raw"    → raw .md + .html
                                 - "design" → topic pages + cover + edition (html+pdf)
 
-                              Deliver (planned):
+                              Deliver:
                                 - email    → SMTP / SendGrid / Mailgun
                                 - telegram → Bot API (sendDocument)
 
@@ -53,6 +53,7 @@ Synthesize has three output modes:
 - `LLMProvider` — alternative LLM backends
 - `HighlightSelector` — strategies for selecting cover page highlights
 - `NewspaperStrategy` — alternative newspaper agent implementations
+- `DeliveryTarget` — delivery channels (Telegram, email) without touching pipeline code
 
 ## 3. Project Structure
 
@@ -63,6 +64,7 @@ nsdn/
 ├── docs/
 │   ├── DESIGN.md              # This document
 │   └── design/
+│       ├── delivery.md        # Automated delivery system design
 │       ├── mobile-desktop.md  # Mobile/desktop dual-mode rendering design
 │       ├── multi-tenant.md    # Multi-tenant architecture (planned)
 │       └── newspaper_agent.md # Newspaper agent design
@@ -85,6 +87,12 @@ nsdn/
 │   │   ├── __init__.py        # SOURCE_REGISTRY + register/get
 │   │   ├── base.py            # EntrySource ABC + FeedEntry model
 │   │   └── reddit.py          # Reddit subreddit source (auto-registers)
+│   ├── delivery/              # Pluggable delivery targets
+│   │   ├── __init__.py        # DELIVERY_REGISTRY + register/get + run_delivery()
+│   │   ├── base.py            # DeliveryTarget ABC + ContentInfo model
+│   │   ├── builder.py         # build_content_info() — assembles PDFs + caption
+│   │   ├── telegram.py        # TelegramDelivery — Bot API sendDocument
+│   │   └── email.py           # EmailDelivery — SMTP
 │   ├── designers/             # Pluggable page designers
 │   │   ├── __init__.py        # DESIGNER_REGISTRY + register/get
 │   │   ├── base.py            # PageDesigner ABC
@@ -405,7 +413,43 @@ schedule:
   - "08:00"
   - "13:00"
   - "19:00"
+
+delivery:
+  enabled: true
+  content:
+    include_pdf: true
+    include_mobile_pdf: true
+    include_caption: true
+    caption_template: |
+      NSDN Edition — {date} ({slot})
+      Topics: {topics}
+      Entries: {entry_count}
+  targets:
+    - type: telegram
+      label: "my-telegram"
+      enabled: true
+      config:
+        bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+        send_as_document: true
+        caption_prefix: ""
+    - type: email
+      label: "my-email"
+      enabled: false
+      config:
+        method: "smtp"
+        smtp_host: "smtp.example.com"
+        smtp_port: 587
+        smtp_user: "${EMAIL_USER}"
+        smtp_password: "${EMAIL_PASSWORD}"
+        from: "nsdn@example.com"
+        to: ["user@example.com"]
+        subject_template: "NSDN — {date} ({slot})"
 ```
+
+### Env var resolution
+
+All config string values support `${ENV_VAR}` substitution. Resolved at load time in `loader.py` before Pydantic validation. Unresolved variables are left as-is (useful for spotting missing env vars). Benefits all config sections — not just delivery.
 
 ### Config models (Pydantic)
 
@@ -446,6 +490,23 @@ class NewspaperConfig(BaseModel):
     modes: dict[str, ViewportMode]  # "desktop" + "mobile" defaults
     layouts: list[str] = ["hero", "grid", "sidebar"]
     # ... plus viewport, screenshot, pdf, cover, font_preset, fonts, colors, evaluation
+
+class DeliveryContentConfig(BaseModel):
+    include_pdf: bool = True
+    include_mobile_pdf: bool = True
+    include_caption: bool = True
+    caption_template: str = "NSDN Edition — {date} ({slot})\nTopics: {topics}\nEntries: {entry_count}"
+
+class DeliveryTargetConfig(BaseModel):
+    type: str
+    label: str
+    enabled: bool = True
+    config: dict[str, Any] = {}
+
+class DeliveryConfig(BaseModel):
+    enabled: bool = False
+    content: DeliveryContentConfig
+    targets: list[DeliveryTargetConfig] = []
 ```
 
 ## 6. Weaviate Integration
@@ -651,8 +712,11 @@ Lightweight HTTP server serving the output directory.
 ### 8.8 Full Run (`nsdn run`)
 
 ```
-nsdn run          → extract → summarize → filter → synthesize (mode from config)
-nsdn synthesize   → standalone synthesize (mode from config)
+nsdn run              → extract → summarize → filter → synthesize (mode from config)
+nsdn run --deliver    → same as above, then deliver edition if config.delivery.enabled
+nsdn synthesize       → standalone synthesize (mode from config)
+nsdn deliver          → deliver a previously generated edition (auto-detects latest)
+nsdn deliver --edition <path> → deliver a specific edition directory
 ```
 
 The synthesize mode is configured in `config.synthesize.mode`. Switch between `"llm"`, `"raw"`, and `"design"` by editing the config or passing `--mode` (future CLI flag).
@@ -669,6 +733,8 @@ The synthesize mode is configured in `config.synthesize.mode`. Switch between `"
 | `nsdn render-all` | Render all unrendered markdown files |
 | `nsdn serve` | Serve output directory as static site |
 | `nsdn run` | Full pipeline (mode from config) |
+| `nsdn run --deliver` | Full pipeline + deliver edition after synthesis |
+| `nsdn deliver --edition <path>` | Deliver a previously generated edition |
 | `nsdn validate` | Validate all configured sources |
 
 ## 9. LLM Integration
@@ -757,14 +823,13 @@ dependencies = [
 | Markdown intermediate | Yes (for synthesize) | Inspectable output |
 | No web framework | Python http.server | Zero dependencies, static output |
 | Schema migrations | Column-check + ALTER TABLE | Simple, no migration framework needed |
+| Delivery targets | Registry pattern + `${ENV_VAR}` resolution | Consistent with sources/designers; secrets never in config files |
 
 ## 13. Future Considerations (Not in v1)
 
 - **RSS/Atom source** — `rss.py` implementation (high priority — unblocks X via RSS bridge)
 - **X/Twitter source** — via RSS bridge (rsshub.app) or X API v2 (paid tier)
 - **HackerNews source** — `hackernews.py` implementation
-- **Email delivery** — `src/nsdn/delivery/email.py` — SMTP or SendGrid/Mailgun API
-- **Telegram delivery** — `src/nsdn/delivery/telegram.py` — Bot API (`sendMessage` + `sendDocument`)
 - **Scheduled runs** — systemd timer or cron for fully automated pipeline
 - **Feedback loop** — user rates editions, LLM learns preferences
 - **Multi-user profiles** — separate configs per user
@@ -805,10 +870,9 @@ Planned: `nsdn run --dry-run` — preview without marking entries processed.
 | Mobile cover generation | ✅ Implemented |
 | Page-cut prevention (break-inside + max-height) | ✅ Implemented |
 | Highlight selectors (TopScorePerTopic) | ✅ Implemented |
+| Automated delivery (Telegram + Email) | ✅ Implemented |
 | RSS/Atom source | ❌ Planned (high priority) |
 | X/Twitter source (via RSS bridge) | ❌ Planned (high priority) |
-| Email delivery | ❌ Planned (high priority) |
-| Telegram delivery | ❌ Planned (high priority) |
 | Scheduled runs (auto-publishing) | ❌ Planned (high priority) |
 | HackerNews source | ❌ Planned |
 | Dry-run mode | ❌ Planned |

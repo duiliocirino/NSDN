@@ -162,6 +162,45 @@ class NewspaperConfig(BaseModel):
     )
 
 
+class DeliveryContentConfig(BaseModel):
+    """What to include in the delivery payload."""
+
+    include_pdf: bool = True
+    include_mobile_pdf: bool = True
+    include_caption: bool = True
+    caption_template: str = (
+        "NSDN Edition — {date} ({slot})\n"
+        "Topics: {topics}\n"
+        "Entries: {entry_count}"
+    )
+
+
+class DeliveryTargetConfig(BaseModel):
+    """Per-target configuration — matches SourceConfig pattern."""
+
+    type: str
+    label: str
+    enabled: bool = True
+    config: dict[str, Any] = Field(default_factory=dict)
+
+
+class DeliveryResult(BaseModel):
+    """Result of a single delivery attempt."""
+
+    target_type: str
+    target_label: str
+    success: bool
+    message: str = ""
+
+
+class DeliveryConfig(BaseModel):
+    """Top-level delivery configuration."""
+
+    enabled: bool = False
+    content: DeliveryContentConfig = Field(default_factory=DeliveryContentConfig)
+    targets: list[DeliveryTargetConfig] = Field(default_factory=list)
+
+
 class AppConfig(BaseModel):
     debug: bool = False
     interests: list[str] = Field(default_factory=list)
@@ -174,6 +213,7 @@ class AppConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     weaviate: WeaviateConfig = Field(default_factory=WeaviateConfig)
     newspaper: NewspaperConfig = Field(default_factory=NewspaperConfig)
+    delivery: DeliveryConfig = Field(default_factory=DeliveryConfig)
     schedule: list[str] = Field(default_factory=lambda: ["08:00", "13:00", "19:00"])
 
     model_config = {"populate_by_name": True}

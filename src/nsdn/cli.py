@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 
 from nsdn.db import Database
+from nsdn.delivery import run_delivery
 from nsdn.extract import run_extract
 from nsdn.filter import run_filter
 from nsdn.llm import create_provider
@@ -140,8 +141,9 @@ def serve(ctx, port, directory):
 
 
 @cli.command()
+@click.option("--deliver", is_flag=True, help="Deliver edition after synthesis.")
 @click.pass_context
-def run(ctx):
+def run(ctx, deliver):
     """Run the full pipeline: extract → summarize → filter → synthesize."""
     config = ctx.obj["config"]
     db = Database()
@@ -177,10 +179,59 @@ def run(ctx):
             click.echo(f"  HTML:     {synth_result['html_file']}")
         else:
             click.echo("  No entries to synthesize")
+
+        # Delivery
+        if deliver and config.delivery.enabled:
+            click.echo("\n=== Deliver ===")
+            edition_dir = synth_result.get("edition_dir")
+            if edition_dir:
+                results = run_delivery(config, Path(edition_dir))
+                for r in results:
+                    status = "OK" if r.success else "FAIL"
+                    click.echo(f"  [{status}] {r.target_label}: {r.message}")
+            else:
+                click.echo("  No edition to deliver")
     finally:
         db.close()
         if vector:
             vector.close()
+
+
+@cli.command()
+@click.option("--edition", type=click.Path(exists=True), default=None,
+              help="Path to edition directory to deliver. Defaults to latest edition.")
+@click.pass_context
+def deliver(ctx, edition):
+    """Deliver a previously generated edition."""
+    config = ctx.obj["config"]
+
+    if not config.delivery.enabled:
+        click.echo("Delivery is not enabled in config")
+        return
+
+    # Resolve edition directory
+    edition_path = Path(edition) if edition else _latest_edition_dir(config)
+    if not edition_path or not edition_path.is_dir():
+        click.echo(f"No edition found at: {edition_path}")
+        return
+
+    click.echo(f"Delivering: {edition_path.name}")
+    results = run_delivery(config, edition_path)
+    for r in results:
+        status = "OK" if r.success else "FAIL"
+        click.echo(f"  [{status}] {r.target_label}: {r.message}")
+
+
+def _latest_edition_dir(config) -> Path | None:
+    """Find the most recent edition directory."""
+    output_dir = Path(config.output.directory)
+    if not output_dir.is_dir():
+        return None
+    editions = sorted(
+        (d for d in output_dir.iterdir() if d.is_dir() and d.name[0:4].isdigit()),
+        key=lambda d: d.name,
+    )
+    return editions[-1] if editions else None
 
 
 @cli.command()

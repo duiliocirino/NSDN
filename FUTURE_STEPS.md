@@ -15,15 +15,10 @@
 - [x] **Mobile Cover Generation** — `generate_cover(mode)` renders mode-aware hero/grid for both desktop and mobile covers.
 - [x] **Hero Layout Fix** — Mobile hero uses `display: block` instead of flex to prevent WeasyPrint height-calculation bugs and content overlap.
 - [x] **Mobile Page-Cut Fix** — `break-inside: avoid` on grid items, hero articles, and sidebar items. `max-height: 360px` on mobile stacked images. Prevents images from splitting across pages.
+- [x] **Automated Delivery** — `DeliveryTarget` ABC with `TelegramDelivery` (Bot API sendDocument) and `EmailDelivery` (SMTP). Registry pattern matching existing extension points. `nsdn run --deliver` (integrated) and `nsdn deliver --edition <path>` (standalone). `${ENV_VAR}` resolution in config loader for sensitive credentials.
 
 ### **High Priority (Current Focus)**
-1. **Automated Delivery (Email or Telegram)**
-   - Location: `src/nsdn/delivery/` (new module)
-   - Action: Implement `DeliveryTarget` ABC with `EmailDelivery` and `TelegramDelivery` implementations. Wire into CLI as `nsdn deliver`.
-   - Rationale: Enable "set and forget" — editions reach the user without manual intervention.
-   - Depends on: user research (email SMTP vs Telegram Bot API)
-
-2. **RSS/Atom Source**
+1. **RSS/Atom Source**
    - Location: `src/nsdn/sources/rss.py` (new file)
    - Action: Implement `EntrySource` for RSS/Atom feeds using `feedparser`.
    - Rationale: Unblocks X/Twitter via RSS bridge (rsshub.app, etc.) and adds general feed support.

@@ -149,6 +149,26 @@ weaviate:
   dedup_threshold: 0.95
   collection_name: "NSDNEntries"
 
+delivery:
+  enabled: true
+  content:
+    include_pdf: true
+    include_mobile_pdf: true
+    include_caption: true
+    caption_template: |
+      NSDN Edition — {date} ({slot})
+      Topics: {topics}
+      Entries: {entry_count}
+  targets:
+    - type: telegram
+      label: "my-telegram"
+      enabled: true
+      config:
+        bot_token: "${TELEGRAM_BOT_TOKEN}"
+        chat_id: "${TELEGRAM_CHAT_ID}"
+        send_as_document: true
+        caption_prefix: ""
+
 schedule:
   - "08:00"
   - "13:00"
