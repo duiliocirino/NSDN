@@ -1,4 +1,4 @@
-## Future Steps for Newspaper Generator
+## Future Steps for NSDN
 
 ### **Completed**
 - [x] **Structured Image Extraction** — Priority-based `_extract_images()` (gallery → media_metadata, image → i.redd.it, video → secure_media, fallback → i.redd.it thumbnail only). external-preview.redd.it rejected (blocked). Test suite: 30/30 pass.
@@ -14,6 +14,30 @@
 - [x] **Multi-Page VLM Evaluation** — PDF→images via `pypdfium2`, all pages passed to VLM for holistic assessment. Detects cut images, awkward page breaks, missing content on pages 2-3.
 - [x] **Mobile Cover Generation** — `generate_cover(mode)` renders mode-aware hero/grid for both desktop and mobile covers.
 - [x] **Hero Layout Fix** — Mobile hero uses `display: block` instead of flex to prevent WeasyPrint height-calculation bugs and content overlap.
+- [x] **Mobile Page-Cut Fix** — `break-inside: avoid` on grid items, hero articles, and sidebar items. `max-height: 360px` on mobile stacked images. Prevents images from splitting across pages.
+
+### **High Priority (Current Focus)**
+1. **Automated Delivery (Email or Telegram)**
+   - Location: `src/nsdn/delivery/` (new module)
+   - Action: Implement `DeliveryTarget` ABC with `EmailDelivery` and `TelegramDelivery` implementations. Wire into CLI as `nsdn deliver`.
+   - Rationale: Enable "set and forget" — editions reach the user without manual intervention.
+   - Depends on: user research (email SMTP vs Telegram Bot API)
+
+2. **RSS/Atom Source**
+   - Location: `src/nsdn/sources/rss.py` (new file)
+   - Action: Implement `EntrySource` for RSS/Atom feeds using `feedparser`.
+   - Rationale: Unblocks X/Twitter via RSS bridge (rsshub.app, etc.) and adds general feed support.
+
+3. **X/Twitter Source (via RSS Bridge)**
+   - Location: `src/nsdn/sources/x.py` (new file) or RSS config pointing to bridge
+   - Action: Use RSS bridge (rsshub.app or similar) to fetch X user timelines as RSS, consumed by RSS source.
+   - Rationale: X API v2 free tier is too limited; RSS bridge avoids API keys entirely.
+   - Depends on: RSS source implementation
+
+4. **Scheduled Runs (Auto-Publishing)**
+   - Location: `src/nsdn/cli.py` or systemd timer
+   - Action: Wire cron/systemd timer to run `nsdn run` on schedule, followed by delivery.
+   - Rationale: Full automation pipeline: fetch → synthesize → deliver.
 
 ### **Medium Priority (Next Features)**
 1. **Support Multiple Drafts per Topic**
@@ -46,19 +70,14 @@
    - Location: `src/nsdn/newspaper/layouts/pullquote.py`, `src/nsdn/newspaper/layouts/statbox.py`
    - Rationale: Add advanced layout features for professionalism.
 
-4. **Add RSS/Atom and HackerNews Sources**
-   - Location: `src/nsdn/sources/reddit.py`, `src/nsdn/sources/rss.py`
+4. **Add HackerNews Source**
+   - Location: `src/nsdn/sources/hackernews.py`
    - Rationale: Support additional content sources.
 
 5. **Integrate DebugEmitter for Structured Logging in All Strategies**
    - Location: `src/nsdn/newspaper/component.py`, `src/nsdn/newspaper/template.py`
    - Action: Ensure `DebugEmitter` is initialized and used consistently in all strategies.
    - Rationale: Improve debugging and artifact storage for all strategies.
-
-6. **Implement Scheduled Runs and Auto-Publishing**
-   - Location: `src/nsdn/cli.py`
-   - Action: Add cron-like or scheduler-based auto-publishing functionality.
-   - Rationale: Enable automated workflows for regular editions.
 
 ---
 
