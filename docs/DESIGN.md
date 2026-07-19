@@ -33,7 +33,11 @@ Sources (EntrySource)  ──►  SQLite (State Mgr)  ──►  Weaviate (Seman
                                 - "raw"    → raw .md + .html
                                 - "design" → topic pages + cover + edition (html+pdf)
 
-**Pipeline stages:** Extract → Summarize → Filter → Synthesize
+                              Deliver (planned):
+                                - email    → SMTP / SendGrid / Mailgun
+                                - telegram → Bot API (sendDocument)
+
+**Pipeline stages:** Extract → Summarize → Filter → Synthesize → (Deliver)
 
 Synthesize has three output modes:
 - `"llm"` — LLM-written journal in Markdown + HTML
@@ -46,6 +50,8 @@ Synthesize has three output modes:
 - `ClusterStrategy` — alternative clustering strategies
 - `SummarizerStrategy` — alternative summarization strategies
 - `LLMProvider` — alternative LLM backends
+- `HighlightSelector` — strategies for selecting cover page highlights
+- `NewspaperStrategy` — alternative newspaper agent implementations
 
 ## 3. Project Structure
 
@@ -56,6 +62,8 @@ nsdn/
 ├── docs/
 │   ├── DESIGN.md              # This document
 │   └── design/
+│       ├── mobile-desktop.md  # Mobile/desktop dual-mode rendering design
+│       ├── multi-tenant.md    # Multi-tenant architecture (planned)
 │       └── newspaper_agent.md # Newspaper agent design
 ├── src/nsdn/
 │   ├── __init__.py
@@ -89,18 +97,19 @@ nsdn/
 │   │   ├── base.py            # SummarizerStrategy ABC
 │   │   └── llm_summarizer.py  # LLM-based summarization
 │   ├── newspaper/             # Newspaper agent (design mode)
-│   │   ├── __init__.py        # REGISTRY + register_newspaper()
+│   │   ├── __init__.py        # REGISTRY + register_newspaper() + run_newspaper()
 │   │   ├── component.py       # ComponentStrategy (iterative VLM feedback)
-│   │   ├── generator.py       # LayoutGenerator + font presets
-│   │   ├── renderer.py        # Renderer (Playwright + WeasyPrint)
-│   │   ├── evaluator.py       # Evaluator (VLM + text self-review)
+│   │   ├── generator.py       # LayoutGenerator + font presets + mode-aware cover
+│   │   ├── renderer.py        # Renderer (Playwright + WeasyPrint + pypdfium2 PDF→images)
+│   │   ├── evaluator.py       # Evaluator (VLM + text self-review + multi-page eval)
 │   │   ├── cover.py           # CoverDesigner
-│   │   ├── prompts.py         # Design + evaluation prompts
-│   │   ├── debug.py           # DebugEmitter (structured trace + artifacts)
+│   │   ├── prompts.py         # Design + evaluation prompts (single + multi-page)
+│   │   ├── selectors.py       # HighlightSelector ABC + TopScorePerTopic
 │   │   └── layouts/           # Layout components
-│   │       ├── hero.py        # Hero article (with image)
-│   │       ├── grid.py        # Grid (with thumbnails)
-│   │       └── sidebar.py     # Sidebar (text-only)
+│   │       ├── __init__.py
+│   │       ├── hero.py        # Hero article (with image, mode-aware stacked layout)
+│   │       ├── grid.py        # Grid (with thumbnails, mode-aware columns)
+│   │       └── sidebar.py     # Sidebar (text-only, mode-aware border)
 │   └── assets/                # Bundled static assets (future)
 │       └── __init__.py
 ├── templates/
@@ -110,17 +119,30 @@ nsdn/
 │   ├── assets/                # Cached images (when cache_images=true)
 │   └── {date}-{slot}/         # Edition directory (design mode)
 │       ├── cover.html
-│       ├── edition.pdf        # Combined multi-page PDF
+│       ├── cover-mobile.html
+│       ├── edition.pdf        # Combined multi-page PDF (desktop A4)
+│       ├── edition-mobile.pdf # Combined multi-page PDF (mobile 375x812)
 │       └── topics/            # Per-topic pages
 │           ├── {topic}.html
-│           └── {topic}.pdf
+│           ├── {topic}.pdf
+│           └── {topic}-mobile.pdf
+├── output/debug/              # Debug artifacts (when debug=true)
+│   └── {date}-{slot}/
+│       └── {topic}/
+│           ├── iter0.html
+│           ├── iter0-mobile.html
+│           ├── iter0_spec.json
+│           ├── desktop-page0.png
+│           ├── mobile-page0.png
+│           └── mobile-page1.png
 ├── data/
 │   └── feeds.db               # SQLite database
 ├── pyproject.toml
 └── README.md
 ```
 
-**Note:** RSS and HackerNews sources are planned but not yet implemented.
+**Note:** RSS, HackerNews, and X/Twitter sources are planned but not yet implemented.
+The `schedule` field in config defines run times; actual scheduling is handled externally (cron or systemd timer).
 
 ## 4. Source Abstraction
 
@@ -313,9 +335,12 @@ llm:
 
 # Newspaper agent config (when synthesize.mode = "design")
 newspaper:
-  strategy: "component"
+  enabled: true
+  strategy: "component"       # "component" | "template" | "scratch"
   max_iterations: 4
   quality_threshold: 7
+  eval_modes: "full"          # "full" (both modes) | "fast" (desktop only)
+  generate_mobile: true       # Generate separate mobile edition PDF
   viewport:
     width: 794          # A4 at 96dpi
     height: 1123
@@ -324,12 +349,39 @@ newspaper:
   pdf:
     format: "A4"
     margin: "20mm"
-  font_preset: "editorial"  # classic | editorial | modern | newspaper
-  fonts:                      # Override individual font values
+  cover:
+    style: "minimal"
+  layouts:
+    - "hero"
+    - "grid"
+    - "sidebar"
+  modes:                        # Viewport modes for dual-mode rendering
+    desktop:
+      label: "desktop"
+      viewport: { width: 794, height: 1123 }
+      grid_columns: 2
+      base_font_size: "0.85rem"
+      hero_font_size: "1.4rem"
+      hero_summary_size: "0.85rem"
+      hero_image_width: "280px"
+      thumbnail_width: "120px"
+      spacing: "1rem"
+    mobile:
+      label: "mobile"
+      viewport: { width: 375, height: 812 }
+      grid_columns: 1
+      base_font_size: "1rem"
+      hero_font_size: "1.3rem"
+      hero_summary_size: "0.95rem"
+      hero_image_width: "100%"
+      thumbnail_width: "100%"
+      spacing: "1.5rem"
+  font_preset: "classic"        # classic | editorial | modern | newspaper
+  fonts:                        # Override individual font values
     serif: "Georgia, 'Times New Roman', serif"
     sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    google_fonts: ""          # Optional: Google Fonts @import URL
-  colors:                     # Customizable color palette
+    google_fonts: ""            # Optional: Google Fonts @import URL
+  colors:                       # Customizable color palette
     text: "#333"
     text-muted: "#555"
     border: "#333"
@@ -370,6 +422,28 @@ class LLMConfig(BaseModel):
     def get(self, stage: str) -> ProviderConfig:
         # Returns stage override merged with default, or default
         ...
+
+class ViewportMode(BaseModel):
+    label: str = "desktop"
+    viewport: dict[str, int] = {"width": 794, "height": 1123}
+    grid_columns: int = 2
+    base_font_size: str = "0.85rem"
+    hero_font_size: str = "1.4rem"
+    hero_summary_size: str = "0.85rem"
+    hero_image_width: str = "280px"
+    thumbnail_width: str = "120px"
+    spacing: str = "1rem"
+
+class NewspaperConfig(BaseModel):
+    enabled: bool = True
+    strategy: str = "component"
+    max_iterations: int = 4
+    quality_threshold: int = 7
+    eval_modes: str = "full"       # "full" | "fast"
+    generate_mobile: bool = True
+    modes: dict[str, ViewportMode]  # "desktop" + "mobile" defaults
+    layouts: list[str] = ["hero", "grid", "sidebar"]
+    # ... plus viewport, screenshot, pdf, cover, font_preset, fonts, colors, evaluation
 ```
 
 ## 6. Weaviate Integration
@@ -545,8 +619,13 @@ output/journal/{date}-{slot}/
 - A4-matched screenshot viewport (794×1123px) for consistent evaluation
 - Combined PDF merges per-topic CSS (not just cover CSS)
 - Debug emitter (`debug: true`) for structured trace + artifact storage
+- **Mobile/Desktop dual-mode rendering** — single LLM layout spec, two CSS variants. Mobile uses 375×812 viewport, 1-column grid, stacked hero. Separate `edition-mobile.pdf` output.
+- **Multi-page VLM evaluation** — PDF rendered to images via `pypdfium2`, all pages passed to VLM together for holistic cross-page assessment. Detects cut images, awkward page breaks, missing content.
+- **Mobile cover generation** — mode-aware cover with 1-column grid and stacked hero.
+- **Page-cut prevention** — `break-inside: avoid` on articles, `max-height: 360px` on mobile images to prevent page-boundary cuts.
 
 See `docs/design/newspaper_agent.md` for full design agent specification.
+See `docs/design/mobile-desktop.md` for dual-mode rendering details.
 
 **Filenames:** `{mode}-{date}-{slot}.{ext}` (e.g., `llm-2025-01-15-morning.md`).
 
@@ -644,17 +723,25 @@ dependencies = [
     "click>=8.1",
     "pydantic>=2.0",
     "weaviate-client>=4.0",
-    "requests",
-    # LLM providers (optional):
-    # "llama-cpp-python",
-    # "ollama",
-    # "openai",
+    "requests>=2.31",
+    # LLM providers:
+    "openai>=1.0",
+    "ollama>=0.0",
+    "llama-cpp-python>=0.1",
+    # Newspaper agent:
+    "playwright>=1.58.0,<2.0.0",
+    "weasyprint>=68.1,<69.0",
+    "pypdfium2>=5.8.0,<6.0.0",
 ]
 ```
 
-Planned dependencies for newspaper agent:
-- `playwright` — headless browser for screenshots
-- `weasyprint` — HTML → PDF
+**Dependency notes:**
+- `playwright` — headless browser for screenshots (Chromium)
+- `weasyprint` — HTML → PDF rendering (requires system fonts)
+- `pypdfium2` — PDF → image conversion for multi-page VLM evaluation
+- `openai` — OpenAI-compatible API (used by LlamaServerProvider)
+- `ollama` — Ollama provider for local model inference
+- `llama-cpp-python` — local GGUF model inference
 
 ## 12. Design Decisions & Tradeoffs
 
@@ -671,9 +758,12 @@ Planned dependencies for newspaper agent:
 
 ## 13. Future Considerations (Not in v1)
 
-- **RSS/Atom source** — `rss.py` implementation
+- **RSS/Atom source** — `rss.py` implementation (high priority — unblocks X via RSS bridge)
+- **X/Twitter source** — via RSS bridge (rsshub.app) or X API v2 (paid tier)
 - **HackerNews source** — `hackernews.py` implementation
-- **Email/Telegram delivery** — push editions
+- **Email delivery** — `src/nsdn/delivery/email.py` — SMTP or SendGrid/Mailgun API
+- **Telegram delivery** — `src/nsdn/delivery/telegram.py` — Bot API (`sendMessage` + `sendDocument`)
+- **Scheduled runs** — systemd timer or cron for fully automated pipeline
 - **Feedback loop** — user rates editions, LLM learns preferences
 - **Multi-user profiles** — separate configs per user
 - **Archive browsing** — list past editions with search
@@ -708,7 +798,16 @@ Planned: `nsdn run --dry-run` — preview without marking entries processed.
 | Designers (Pico, Water) | ✅ Implemented |
 | Weaviate semantic dedup | ✅ Implemented |
 | Newspaper agent (design as synthesize mode) | ✅ Implemented |
-| RSS/Atom source | ❌ Planned |
+| Mobile/Desktop dual-mode rendering | ✅ Implemented |
+| Multi-page VLM evaluation (pypdfium2) | ✅ Implemented |
+| Mobile cover generation | ✅ Implemented |
+| Page-cut prevention (break-inside + max-height) | ✅ Implemented |
+| Highlight selectors (TopScorePerTopic) | ✅ Implemented |
+| RSS/Atom source | ❌ Planned (high priority) |
+| X/Twitter source (via RSS bridge) | ❌ Planned (high priority) |
+| Email delivery | ❌ Planned (high priority) |
+| Telegram delivery | ❌ Planned (high priority) |
+| Scheduled runs (auto-publishing) | ❌ Planned (high priority) |
 | HackerNews source | ❌ Planned |
 | Dry-run mode | ❌ Planned |
 | Score stats command | ❌ Planned |
