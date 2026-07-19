@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import yaml
 
 from nsdn.config import AppConfig
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_CONFIG_PATH = Path("config/nsdn.yaml")

@@ -1,5 +1,7 @@
 """Designer registry."""
 
+from __future__ import annotations
+
 from nsdn.designers.base import PageDesigner
 
 DESIGNER_REGISTRY: dict[str, type[PageDesigner]] = {}

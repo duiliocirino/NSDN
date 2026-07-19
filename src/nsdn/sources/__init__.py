@@ -1,5 +1,7 @@
 """Source registry."""
 
+from __future__ import annotations
+
 from nsdn.sources.base import EntrySource
 
 SOURCE_REGISTRY: dict[str, type[EntrySource]] = {}
