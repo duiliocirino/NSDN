@@ -18,23 +18,23 @@ class SummarizeConfig(BaseModel):
     strategy: str = "llm"
     batch_size: int = 10
     max_content_chars: int = 8000
-    max_summary_chars: int = 500
-    min_length: int = 500  # only summarize content longer than this
+    max_summary_chars: int = 8000
+    min_length: int = 1000  # only summarize content longer than this
 
 
 class FilterConfig(BaseModel):
-    mode: str = "sequential"  # "sequential" | "batch"
-    batch_size: int = 15
-    score_threshold: int = 7
-    max_items_per_feed: int = 20
+    mode: str = "batch"  # "batch" | "sequential"
+    batch_size: int = 10
+    score_threshold: int = 8
+    max_items_per_feed: int = 25
 
 
 class SynthesizeConfig(BaseModel):
-    mode: str = "llm"  # "llm" | "raw" | "design"
+    mode: str = "design"  # "llm" | "raw" | "design"
     cluster_strategy: str = "llm"
     raw_content: str = "summary"  # "summary" | "truncated" | "full"
     raw_max_chars: int = 2000
-    max_sections: int = 5
+    max_sections: int = 10
     style: str = "technical_minimal"
 
 
@@ -55,8 +55,8 @@ class ProviderConfig(BaseModel):
     provider: str = "llama_server"
     model: str = ""
     base_url: str = "http://localhost:8181"
-    temperature: float = 0.0
-    max_tokens: int = 4096
+    temperature: float = 0.7
+    max_tokens: int = 131072
 
 
 class LLMConfig(BaseModel):
@@ -110,7 +110,7 @@ class NewspaperConfig(BaseModel):
     enabled: bool = True
     strategy: str = "component"  # "component" | "template" | "scratch"
     max_iterations: int = 4
-    quality_threshold: int = 7
+    quality_threshold: int = 8
     viewport: dict[str, int] = Field(default_factory=lambda: {"width": 794, "height": 1123})  # A4 at 96dpi
     screenshot: dict[str, int] = Field(default_factory=lambda: {"dpi": 300})
     pdf: dict[str, str] = Field(default_factory=lambda: {"format": "A4", "margin": "20mm"})
@@ -143,7 +143,7 @@ class NewspaperConfig(BaseModel):
             spacing="1.5rem",
         ),
     })
-    font_preset: str = "classic"  # classic, editorial, modern, newspaper
+    font_preset: str = "editorial"  # classic, editorial, modern, newspaper
     fonts: dict[str, str] = Field(
         default_factory=lambda: {
             "serif": "Georgia, 'Times New Roman', serif",

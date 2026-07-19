@@ -38,6 +38,7 @@ Sources (EntrySource)  ──►  SQLite (State Mgr)  ──►  Weaviate (Seman
                                 - telegram → Bot API (sendDocument)
 
 **Pipeline stages:** Extract → Summarize → Filter → Synthesize → (Deliver)
+```
 
 Synthesize has three output modes:
 - `"llm"` — LLM-written journal in Markdown + HTML
@@ -76,6 +77,7 @@ nsdn/
 │   ├── render.py              # Standalone md → HTML (post-hoc utility)
 │   ├── serve.py               # Lightweight HTTP server
 │   ├── db.py                  # SQLite schema, queries, migrations
+│   ├── debug.py               # DebugEmitter (structured trace + artifacts)
 │   ├── llm.py                 # LLMProvider ABC + implementations
 │   ├── prompts.py             # LLM prompt templates
 │   ├── vector.py              # Weaviate client wrapper
@@ -283,21 +285,21 @@ summarize:
   strategy: "llm"
   batch_size: 10
   max_content_chars: 8000
-  max_summary_chars: 500
-  min_length: 500          # only summarize content longer than this
+  max_summary_chars: 8000
+  min_length: 1000          # only summarize content longer than this
 
 filter:
   mode: "batch"            # "batch" | "sequential"
-  batch_size: 15
-  score_threshold: 7
-  max_items_per_feed: 20
+  batch_size: 10
+  score_threshold: 8
+  max_items_per_feed: 25
 
 synthesize:
-  mode: "llm"              # "llm" | "raw" | "design"
+  mode: "design"           # "llm" | "raw" | "design"
   cluster_strategy: "llm"
   raw_content: "summary"   # "summary" | "truncated" | "full"
   raw_max_chars: 2000
-  max_sections: 5
+  max_sections: 10
   style: "technical_minimal"
 
 output:
@@ -316,7 +318,7 @@ llm:
     model: "gemma4-e4b"
     base_url: "http://localhost:8181"
     temperature: 0.7
-    max_tokens: 4096
+    max_tokens: 131072
 
   # Per-stage overrides (optional)
   models:
@@ -338,7 +340,7 @@ newspaper:
   enabled: true
   strategy: "component"       # "component" | "template" | "scratch"
   max_iterations: 4
-  quality_threshold: 7
+  quality_threshold: 8
   eval_modes: "full"          # "full" (both modes) | "fast" (desktop only)
   generate_mobile: true       # Generate separate mobile edition PDF
   viewport:
@@ -376,7 +378,7 @@ newspaper:
       hero_image_width: "100%"
       thumbnail_width: "100%"
       spacing: "1.5rem"
-  font_preset: "classic"        # classic | editorial | modern | newspaper
+  font_preset: "editorial"      # classic | editorial | modern | newspaper
   fonts:                        # Override individual font values
     serif: "Georgia, 'Times New Roman', serif"
     sans: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -412,8 +414,8 @@ class ProviderConfig(BaseModel):
     provider: str = "llama_server"
     model: str = ""
     base_url: str = "http://localhost:8181"
-    temperature: float = 0.0
-    max_tokens: int = 4096
+    temperature: float = 0.7
+    max_tokens: int = 131072
 
 class LLMConfig(BaseModel):
     default: ProviderConfig
@@ -438,7 +440,7 @@ class NewspaperConfig(BaseModel):
     enabled: bool = True
     strategy: str = "component"
     max_iterations: int = 4
-    quality_threshold: int = 7
+    quality_threshold: int = 8
     eval_modes: str = "full"       # "full" | "fast"
     generate_mobile: bool = True
     modes: dict[str, ViewportMode]  # "desktop" + "mobile" defaults
