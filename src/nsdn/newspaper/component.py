@@ -71,7 +71,7 @@ class ComponentStrategy(NewspaperStrategy):
         entries = db.get_kept_entries(processed=False)
         if not entries:
             logger.info("No kept entries to design")
-            return {"entries": 0, "topics": 0, "files": []}
+            return {"entries": 0, "topics": 0, "files": [], "edition_dir": ""}
 
         logger.info("Designing %d kept entries", len(entries))
 
@@ -87,7 +87,7 @@ class ComponentStrategy(NewspaperStrategy):
             self.emitter.save_json("cluster.json", {t: len(v) for t, v in entries_by_topic.items()})
 
             if not entries_by_topic:
-                return {"entries": len(entries), "topics": 0, "files": []}
+                return {"entries": len(entries), "topics": 0, "files": [], "edition_dir": ""}
 
             logger.info("Clustered into %d topics: %s", len(entries_by_topic), list(entries_by_topic.keys()))
 
@@ -138,6 +138,7 @@ class ComponentStrategy(NewspaperStrategy):
                 "entries": len(entries),
                 "topics": len(topic_pages),
                 "files": files,
+                "edition_dir": str(edition_dir),
             }
         finally:
             self.emitter.close()

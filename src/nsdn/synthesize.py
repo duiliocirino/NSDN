@@ -23,7 +23,7 @@ def run_synthesize(config: AppConfig, db: Database, llm: LLMProvider) -> dict[st
     entries = db.get_kept_entries(processed=False)
     if not entries:
         logger.info("No kept entries to synthesize")
-        return {"entries": 0, "sections": 0, "md_file": "", "html_file": ""}
+        return {"entries": 0, "sections": 0, "edition_dir": "", "md_file": "", "html_file": ""}
 
     logger.info("Synthesizing %d kept entries (mode=%s)", len(entries), config.synthesize.mode)
 
@@ -35,7 +35,7 @@ def run_synthesize(config: AppConfig, db: Database, llm: LLMProvider) -> dict[st
     entries_by_topic = _cluster(config, llm, entries)
     if not entries_by_topic:
         logger.warning("Clustering produced no topics")
-        return {"entries": len(entries), "sections": 0, "md_file": "", "html_file": ""}
+        return {"entries": len(entries), "sections": 0, "edition_dir": "", "md_file": "", "html_file": ""}
 
     logger.info("Clustered into %d topics: %s", len(entries_by_topic), list(entries_by_topic.keys()))
 
@@ -121,6 +121,7 @@ def _write_llm(
     return {
         "entries": len(entries),
         "sections": len(sections),
+        "edition_dir": str(output_dir),
         "md_file": str(md_file),
         "html_file": str(html_file),
     }
@@ -152,6 +153,7 @@ def _write_raw(
     return {
         "entries": len(entries),
         "sections": len(entries_by_topic),
+        "edition_dir": str(output_dir),
         "md_file": str(md_file),
         "html_file": str(html_file),
     }
