@@ -147,6 +147,9 @@ nsdn/
 │           └── mobile-page1.png
 ├── data/
 │   └── feeds.db               # SQLite database
+├── scripts/
+│   ├── preview_colors.py      # Color palette preview tool
+│   └── setup_schedule.sh      # Generate systemd service + timer for scheduled runs
 ├── pyproject.toml
 └── README.md
 ```
@@ -761,24 +764,61 @@ Each pipeline stage passes its name to `create_provider(config.llm, model_name="
 
 ## 10. Scheduling
 
-**Cron:**
+Schedule times are defined in `config/nsdn.yaml` under `schedule`. The actual scheduler is external (systemd timer or cron).
+
+### Setup script
+
+Run once to generate ready-to-use systemd unit files:
+
+```bash
+# User-level (no sudo, recommended for desktop/laptop)
+bash scripts/setup_schedule.sh --user
+
+# System-level (requires sudo, for servers)
+bash scripts/setup_schedule.sh
+```
+
+The script auto-detects:
+- Poetry path
+- `.env` location (for `${ENV_VAR}` credential resolution)
+- Schedule times from `config/nsdn.yaml`
+
+### Systemd timer (recommended)
+
+After running the setup script:
+
+```bash
+# Activate
+systemctl --user daemon-reload
+systemctl --user enable --now nsdn.timer
+
+# Check status
+systemctl --user status nsdn.timer
+
+# View logs
+journalctl --user -u nsdn.service -f          # follow live
+journalctl --user -u nsdn.service --since today  # today's runs
+
+# Stop scheduling
+systemctl --user disable --now nsdn.timer
+```
+
+### Cron (alternative)
+
 ```cron
-0 8,13,19 * * * cd /path/to/nsdn && poetry run nsdn run >> /var/log/nsdn.log 2>&1
+# Load .env and run at configured times
+0 8,13,19 * * * cd /path/to/nsdn && source .env && poetry run nsdn run --deliver >> /var/log/nsdn.log 2>&1
 ```
 
-**Systemd timer:**
-```ini
-# nsdn.service
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/poetry run nsdn run
-WorkingDirectory=/path/to/nsdn
+### Management
 
-# nsdn.timer
-[Timer]
-OnCalendar=08:00,13:00,19:00
-Persistent=true
-```
+| Task | Command |
+|------|---------|
+| Check next run | `systemctl --user list-timers nsdn.timer` |
+| View last run log | `journalctl --user -u nsdn.service -n 50 --no-pager` |
+| Run manually (test) | `poetry run nsdn run --deliver` |
+| Force immediate run | `systemctl --user start nsdn.service` |
+| Stop scheduling | `systemctl --user disable --now nsdn.timer` |
 
 ## 11. Dependencies
 

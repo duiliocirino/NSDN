@@ -30,9 +30,10 @@
    - Depends on: RSS source implementation
 
 4. **Scheduled Runs (Auto-Publishing)**
-   - Location: `src/nsdn/cli.py` or systemd timer
-   - Action: Wire cron/systemd timer to run `nsdn run` on schedule, followed by delivery.
+   - Location: `scripts/setup_schedule.sh` + `docs/DESIGN.md` §10
+   - Action: Setup script generates systemd service + timer with `.env` loading. Cron alternative documented.
    - Rationale: Full automation pipeline: fetch → synthesize → deliver.
+   - Status: Script ready — user runs `bash scripts/setup_schedule.sh --user` to activate.
 
 ### **Medium Priority (Next Features)**
 1. **Support Multiple Drafts per Topic**

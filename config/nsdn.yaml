@@ -170,6 +170,6 @@ delivery:
         caption_prefix: ""
 
 schedule:
-  - "08:00"
+  - "07:00"
   - "13:00"
-  - "19:00"
+  - "20:00"
