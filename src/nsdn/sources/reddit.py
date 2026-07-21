@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 import requests
 
+from nsdn.cookie_utils import get_browser_cookies
 from nsdn.sources.base import EntrySource, FeedEntry
 from nsdn.sources import register_source
 
@@ -25,6 +26,8 @@ class RedditSource(EntrySource):
         self.client_id = config.get("client_id", "")
         self.client_secret = config.get("client_secret", "")
         self.user_agent = config.get("user_agent", "NSDN/0.1")
+        # Use browser cookies from Firefox to bypass rate limits
+        self.use_cookies = config.get("use_cookies", True)
 
     def validate(self) -> bool:
         try:
@@ -34,16 +37,29 @@ class RedditSource(EntrySource):
             logger.error("Reddit validation failed for r/%s: %s", self.subreddit, exc)
             return False
 
-    def _auth_headers(self) -> dict[str, str]:
-        headers = {"User-Agent": self.user_agent}
+    def _request_kwargs(self) -> dict:
+        """Build request kwargs with auth (cookies or OAuth)."""
+        kwargs: dict = {
+            "headers": {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"},
+            "timeout": 30,
+        }
+
+        # Prefer browser cookies if enabled
+        if self.use_cookies:
+            cookies = get_browser_cookies("reddit.com")
+            if cookies:
+                kwargs["cookies"] = cookies
+                return kwargs
+            logger.warning("Browser cookies not found for reddit.com, falling back to other auth")
+
+        # Fall back to OAuth credentials if available
         if self.client_id and self.client_secret:
             import base64
 
             credentials = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
-            headers["Authorization"] = f"Basic {credentials}"
-        else:
-            headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
-        return headers
+            kwargs["headers"]["Authorization"] = f"Basic {credentials}"
+
+        return kwargs
 
     def _fetch_posts(self) -> list[dict]:
         url = f"https://www.reddit.com/r/{self.subreddit}/{self.sort}.json"
@@ -51,7 +67,7 @@ class RedditSource(EntrySource):
             "limit": self.limit,
             "t": self.time_filter,
         }
-        resp = requests.get(url, headers=self._auth_headers(), timeout=30)
+        resp = requests.get(url, params=params, **self._request_kwargs())
         resp.raise_for_status()
         data = resp.json()
         return data["data"]["children"]

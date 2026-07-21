@@ -24,60 +24,69 @@ summarize:
   min_length: 1000
 
 sources:
-  - type: rss
+  - type: reddit
     name: "r/ItaliaPersonalFinance"
     config:
-      url: "https://www.reddit.com/r/ItaliaPersonalFinance/hot.rss"
+      subreddit: "ItaliaPersonalFinance"
+      sort: "hot"
       limit: 15
-      time_filter: 24
-  - type: rss
+      time_filter: "day"
+  - type: reddit
     name: "r/scimmieinborsa"
     config:
-      url: "https://www.reddit.com/r/scimmieinborsa/hot.rss"
+      subreddit: "scimmieinborsa"
+      sort: "hot"
       limit: 5
-      time_filter: 24
-  - type: rss
+      time_filter: "day"
+  - type: reddit
     name: "r/Italy"
     config:
-      url: "https://www.reddit.com/r/Italy/hot.rss"
+      subreddit: "Italy"
+      sort: "hot"
       limit: 10
-      time_filter: 24
-  - type: rss
+      time_filter: "day"
+  - type: reddit
     name: "r/LocalLLaMA"
     config:
-      url: "https://www.reddit.com/r/LocalLLaMA/hot.rss"
+      subreddit: "LocalLLaMA"
+      sort: "hot"
       limit: 25
-      time_filter: 24
-  - type: rss
+      time_filter: "day"
+  - type: reddit
     name: "r/MistralAI"
     config:
-      url: "https://www.reddit.com/r/MistralAI/hot.rss"
+      subreddit: "MistralAI"
+      sort: "hot"
       limit: 10
-      time_filter: 24
-  - type: rss
+      time_filter: "day"
+  - type: reddit
     name: "r/deepseek"
     config:
-      url: "https://www.reddit.com/r/deepseek/hot.rss"
+      subreddit: "deepseek"
+      sort: "hot"
       limit: 10
-      time_filter: 24
-  - type: rss
+      time_filter: "day"
+  - type: reddit
     name: "r/relationshipadvice"
     config:
-      url: "https://www.reddit.com/r/relationshipadvice/hot.rss"
+      subreddit: "relationshipadvice"
+      sort: "hot"
       limit: 10
-      time_filter: 24
-  - type: rss
+      time_filter: "day"
+  - type: reddit
     name: "r/CasualIT"
     config:
-      url: "https://www.reddit.com/r/CasualIT/hot.rss"
+      subreddit: "CasualIT"
+      sort: "hot"
       limit: 10
-      time_filter: 24
-  - type: rss
+      time_filter: "day"
+  - type: reddit
     name: "r/masterduel"
     config:
-      url: "https://www.reddit.com/r/masterduel/hot.rss"
+      subreddit: "masterduel"
+      sort: "hot"
       limit: 10
-      time_filter: 24
+      time_filter: "day"
 
 filter:
   mode: "batch"
@@ -115,7 +124,7 @@ retention:
 llm:
   default:
     provider: "llama_server"
-    model: "gemma4-e4b"
+    model: "gemma4-12b"
     base_url: "http://localhost:8181"
     temperature: 0.7
     max_tokens: 131072
