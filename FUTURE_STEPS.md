@@ -66,6 +66,11 @@
    - Action: Ensure `DebugEmitter` is initialized and used consistently in all strategies.
    - Rationale: Improve debugging and artifact storage for all strategies.
 
+6. **Reddit API Workaround**
+   - Location: `src/nsdn/sources/reddit.py`
+   - Action: Explore Devvit API, authenticated session workarounds, or third-party Reddit APIs to restore direct Reddit source support.
+   - Rationale: Reddit JSON API now requires authentication (blocked for most users). Current workaround uses RSS feeds via `rss.py`.
+
 ---
 
 **Notes:**

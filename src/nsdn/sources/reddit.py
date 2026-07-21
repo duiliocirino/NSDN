@@ -41,6 +41,8 @@ class RedditSource(EntrySource):
 
             credentials = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
             headers["Authorization"] = f"Basic {credentials}"
+        else:
+            headers["User-Agent"] = "Mozilla/5.0 (X11; Linux x86_64; rv:152.0) Gecko/20100101 Firefox/152.0"
         return headers
 
     def _fetch_posts(self) -> list[dict]:
@@ -67,18 +69,18 @@ class RedditSource(EntrySource):
 
     def _extract_images(self, post: dict) -> list[str]:
         """Extract images from a Reddit post with full resolution priority.
-        
+
         Priority order:
         1. Gallery posts: media_metadata (highest resolution)
         2. Image posts: url field (i.redd.it full resolution)
         3. Videos: secure_media.reddit_video.fallback_url
         4. Fallback: i.redd.it thumbnail only
-        
+
         external-preview.redd.it URLs are rejected entirely — they return 403/404
         and cannot be converted to i.redd.it (different content hash per CDN).
         """
         images: list[str] = []
-        
+
         # 1. Gallery posts - extract from media_metadata
         if post.get("gallery_data"):
             gallery_items = post.get("gallery_data", {}).get("items", [])
@@ -96,13 +98,13 @@ class RedditSource(EntrySource):
                             url = largest.get("u")
                             if url and url not in images and self._is_valid_image_url(url):
                                 images.append(url)
-        
+
         # 2. Direct image posts (i.redd.it URL)
         elif post.get("is_self") is False and post.get("url", "").startswith("https://i.redd.it"):
             url = post["url"]
             if url and url not in images and self._is_valid_image_url(url):
                 images.append(url)
-        
+
         # 3. Video posts
         elif post.get("secure_media"):
             secure_media = post.get("secure_media", {})
@@ -110,13 +112,13 @@ class RedditSource(EntrySource):
                 video_url = secure_media["reddit_video"].get("fallback_url")
                 if video_url and video_url not in images and self._is_valid_image_url(video_url):
                     images.append(video_url)
-        
+
         # 4. Fallback: i.redd.it thumbnail only (reject external-preview, they're broken)
         if not images:
             thumbnail = post.get("thumbnail", "")
             if thumbnail and thumbnail.startswith("https://i.redd.it/") and self._is_valid_image_url(thumbnail):
                 images.append(thumbnail)
-        
+
         return images
 
     def fetch(self) -> list[FeedEntry]:
