@@ -19,9 +19,9 @@ if [[ "${1:-}" == "--user" ]]; then
     INSTALL_USER=true
 fi
 
-# Detect poetry
+# Detect poetry (use absolute path for systemd compatibility)
 if command -v poetry &>/dev/null; then
-    POETRY_CMD="poetry"
+    POETRY_CMD="$(command -v poetry)"
 else
     echo "Error: poetry not found in PATH" >&2
     exit 1
