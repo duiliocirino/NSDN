@@ -20,3 +20,4 @@ def get_source(source_type: str) -> type[EntrySource]:
 
 # Import implementations to register them
 import nsdn.sources.reddit  # noqa: F401
+import nsdn.sources.rss  # noqa: F401

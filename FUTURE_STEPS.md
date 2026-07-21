@@ -16,24 +16,15 @@
 - [x] **Hero Layout Fix** — Mobile hero uses `display: block` instead of flex to prevent WeasyPrint height-calculation bugs and content overlap.
 - [x] **Mobile Page-Cut Fix** — `break-inside: avoid` on grid items, hero articles, and sidebar items. `max-height: 360px` on mobile stacked images. Prevents images from splitting across pages.
 - [x] **Automated Delivery** — `DeliveryTarget` ABC with `TelegramDelivery` (Bot API sendDocument) and `EmailDelivery` (SMTP). Registry pattern matching existing extension points. `nsdn run --deliver` (integrated) and `nsdn deliver --edition <path>` (standalone). `${ENV_VAR}` resolution in config loader for sensitive credentials.
+- [x] **Scheduled Runs (Auto-Publishing)** — `scripts/setup_schedule.sh` generates systemd service + timer with `.env` loading. Cron alternative documented. Runs `nsdn run --deliver` at configured schedule times.
+- [x] **RSS/Atom Source** — `RssSource` using `feedparser`. Supports time filtering, image extraction (media:content, enclosure, img tags), category tags. Registry-registered as `"rss"`.
 
 ### **High Priority (Current Focus)**
-1. **RSS/Atom Source**
-   - Location: `src/nsdn/sources/rss.py` (new file)
-   - Action: Implement `EntrySource` for RSS/Atom feeds using `feedparser`.
-   - Rationale: Unblocks X/Twitter via RSS bridge (rsshub.app, etc.) and adds general feed support.
-
-3. **X/Twitter Source (via RSS Bridge)**
+1. **X/Twitter Source (via RSS Bridge)**
    - Location: `src/nsdn/sources/x.py` (new file) or RSS config pointing to bridge
    - Action: Use RSS bridge (rsshub.app or similar) to fetch X user timelines as RSS, consumed by RSS source.
    - Rationale: X API v2 free tier is too limited; RSS bridge avoids API keys entirely.
    - Depends on: RSS source implementation
-
-4. **Scheduled Runs (Auto-Publishing)**
-   - Location: `scripts/setup_schedule.sh` + `docs/DESIGN.md` §10
-   - Action: Setup script generates systemd service + timer with `.env` loading. Cron alternative documented.
-   - Rationale: Full automation pipeline: fetch → synthesize → deliver.
-   - Status: Script ready — user runs `bash scripts/setup_schedule.sh --user` to activate.
 
 ### **Medium Priority (Next Features)**
 1. **Support Multiple Drafts per Topic**

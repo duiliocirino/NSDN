@@ -86,7 +86,8 @@ nsdn/
 │   ├── sources/               # Pluggable entry sources
 │   │   ├── __init__.py        # SOURCE_REGISTRY + register/get
 │   │   ├── base.py            # EntrySource ABC + FeedEntry model
-│   │   └── reddit.py          # Reddit subreddit source (auto-registers)
+│   │   ├── reddit.py          # Reddit subreddit source (auto-registers)
+│   │   └── rss.py             # RSS/Atom feed source (auto-registers)
 │   ├── delivery/              # Pluggable delivery targets
 │   │   ├── __init__.py        # DELIVERY_REGISTRY + register/get + run_delivery()
 │   │   ├── base.py            # DeliveryTarget ABC + ContentInfo model
@@ -154,7 +155,7 @@ nsdn/
 └── README.md
 ```
 
-**Note:** RSS, HackerNews, and X/Twitter sources are planned but not yet implemented.
+**Note:** HackerNews and X/Twitter sources are planned but not yet implemented.
 The `schedule` field in config defines run times; actual scheduling is handled externally (cron or systemd timer).
 
 ## 4. Source Abstraction
@@ -290,6 +291,12 @@ sources:
       sort: "hot"
       limit: 25
       time_filter: "day"
+  - type: rss
+    name: "ArsTechnica"
+    config:
+      url: "https://feeds.arstechnica.com/arstechnica/index"
+      limit: 10
+      time_filter: 24    # hours to look back
 
 summarize:
   enabled: true
@@ -867,7 +874,6 @@ dependencies = [
 
 ## 13. Future Considerations (Not in v1)
 
-- **RSS/Atom source** — `rss.py` implementation (high priority — unblocks X via RSS bridge)
 - **X/Twitter source** — via RSS bridge (rsshub.app) or X API v2 (paid tier)
 - **HackerNews source** — `hackernews.py` implementation
 - **Scheduled runs** — systemd timer or cron for fully automated pipeline
@@ -901,7 +907,7 @@ Planned: `nsdn run --dry-run` — preview without marking entries processed.
 | Per-stage LLM model selection | ✅ Implemented |
 | Summarizers (LLM) | ✅ Implemented |
 | Clusters (LLM with limits) | ✅ Implemented |
-| Sources (Reddit) | ✅ Implemented |
+| Sources (Reddit, RSS) | ✅ Implemented |
 | Designers (Pico, Water) | ✅ Implemented |
 | Weaviate semantic dedup | ✅ Implemented |
 | Newspaper agent (design as synthesize mode) | ✅ Implemented |
