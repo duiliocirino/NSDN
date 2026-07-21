@@ -9,7 +9,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Silence noisy PDF/rendering libraries
+# Silence noisy PDF/rendering libraries (set early to catch module-level logs)
 logging.getLogger("fontTools").setLevel(logging.WARNING)
 logging.getLogger("weasyprint").setLevel(logging.WARNING)
 

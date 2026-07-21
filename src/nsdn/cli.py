@@ -32,6 +32,9 @@ def cli(ctx, config, verbose):
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(levelname)s:%(name)s:%(message)s",
     )
+    # Silence noisy third-party loggers
+    logging.getLogger("fontTools").setLevel(logging.WARNING)
+    logging.getLogger("weasyprint").setLevel(logging.WARNING)
     ctx.ensure_object(dict)
     ctx.obj["config"] = load_config(config)
 
