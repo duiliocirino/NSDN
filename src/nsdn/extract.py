@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from nsdn.config import AppConfig, SourceConfig
 from nsdn.db import Database
@@ -11,6 +12,9 @@ from nsdn.sources.base import FeedEntry
 from nsdn.vector import VectorStore
 
 logger = logging.getLogger(__name__)
+
+# Small delay between sources to avoid hammering feed providers
+INTER_SOURCE_DELAY = 1.0
 
 
 def run_extract(config: AppConfig, db: Database, vector: VectorStore | None = None) -> dict[str, int]:
@@ -58,6 +62,9 @@ def run_extract(config: AppConfig, db: Database, vector: VectorStore | None = No
         if vector:
             for entry in entries:
                 vector.add_entry(entry)
+
+        # Small delay between sources to avoid hammering providers
+        time.sleep(INTER_SOURCE_DELAY)
 
     return stats
 
