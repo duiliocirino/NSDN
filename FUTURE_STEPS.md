@@ -17,10 +17,19 @@
 - [x] **Mobile Page-Cut Fix** — `break-inside: avoid` on grid items, hero articles, and sidebar items. `max-height: 360px` on mobile stacked images. Prevents images from splitting across pages.
 - [x] **Automated Delivery** — `DeliveryTarget` ABC with `TelegramDelivery` (Bot API sendDocument) and `EmailDelivery` (SMTP). Registry pattern matching existing extension points. `nsdn run --deliver` (integrated) and `nsdn deliver --edition <path>` (standalone). `${ENV_VAR}` resolution in config loader for sensitive credentials.
 - [x] **Scheduled Runs (Auto-Publishing)** — `scripts/setup_schedule.sh` generates systemd service + timer with `.env` loading. Cron alternative documented. Runs `nsdn run --deliver` at configured schedule times.
-- [x] **RSS/Atom Source** — `RssSource` using `feedparser`. Supports time filtering, image extraction (media:content, enclosure, img tags), category tags. Registry-registered as `"rss"`.
+- [x] **RSS/Atom Source** — `RssSource` using `feedparser`. Supports time filtering, image extraction (media:content, enclosure, img tags), dual tag extraction (`categories` + `tags`), None-safe content access. Registry-registered as `"rss"`.
+- [x] **RSS Retry Logic** — Exponential backoff on 429 rate-limited feeds, configurable `max_retries` and `retry_delay`.
+- [x] **Browser Cookie Auth for Reddit** — `cookie_utils.py` reads Reddit session cookies from Firefox profile (`cookies.sqlite`) at fetch time. Bypasses 429 rate limits on `.json` API. Falls back to OAuth credentials if cookies unavailable. `use_cookies` config option (default `True`).
+- [x] **Weaviate URL Parsing Fix** — Replaced broken `split(":")` URL parsing with `urlparse`. Corrected default port to `8050`.
+- [x] **Inter-Source Delay** — 1s delay between sources in extract pipeline to avoid hammering feed providers.
 
 ### **High Priority (Current Focus)**
-1. **X/Twitter Source (via RSS Bridge)**
+1. **Weaviate End-to-End Verification**
+   - Location: `src/nsdn/vector.py`, `config/nsdn.yaml`
+   - Action: Start Weaviate container, verify connection, test semantic dedup and search.
+   - Rationale: URL parsing is fixed but never tested against a running instance.
+
+2. **X/Twitter Source (via RSS Bridge)**
    - Location: `src/nsdn/sources/x.py` (new file) or RSS config pointing to bridge
    - Action: Use RSS bridge (rsshub.app or similar) to fetch X user timelines as RSS, consumed by RSS source.
    - Rationale: X API v2 free tier is too limited; RSS bridge avoids API keys entirely.
@@ -65,11 +74,6 @@
    - Location: `src/nsdn/newspaper/component.py`, `src/nsdn/newspaper/template.py`
    - Action: Ensure `DebugEmitter` is initialized and used consistently in all strategies.
    - Rationale: Improve debugging and artifact storage for all strategies.
-
-6. **Reddit API Workaround**
-   - Location: `src/nsdn/sources/reddit.py`
-   - Action: Explore Devvit API, authenticated session workarounds, or third-party Reddit APIs to restore direct Reddit source support.
-   - Rationale: Reddit JSON API now requires authentication (blocked for most users). Current workaround uses RSS feeds via `rss.py`.
 
 ---
 
