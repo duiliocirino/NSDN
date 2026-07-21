@@ -85,7 +85,7 @@ class LLMConfig(BaseModel):
 
 class WeaviateConfig(BaseModel):
     enabled: bool = True
-    url: str = "http://localhost:8080"
+    url: str = "http://localhost:8050"
     embedding_model: str = "qwen3-embedding:8b"
     embedding_endpoint: str = "http://localhost:11434"
     dedup_threshold: float = 0.95

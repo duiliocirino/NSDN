@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
 import weaviate
 
@@ -25,8 +26,9 @@ class VectorStore:
             return
 
         try:
-            host = config.url.split(":")[0]
-            port = int(config.url.split(":")[1]) if ":" in config.url else 8080
+            parsed = urlparse(config.url)
+            host = parsed.hostname or "localhost"
+            port = parsed.port or 8050
             self.client = weaviate.connect_to_local(
                 host=host,
                 port=port,
